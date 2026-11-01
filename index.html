@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="css/line.css?v=94ea94b3">
+<link rel="stylesheet" href="css/line.css?v=d5f35c57">
 </head>
 <body>
 <header class="l-top">
@@ -70,8 +70,8 @@
     <p id="pDone" class="l-done" hidden></p>
     <p id="pErr" class="l-err" hidden></p>
 
-    <h2 class="l-h">発行して印刷する</h2>
-    <p class="l-hint">1組で 1〜15ポイントのQRが1枚ずつ、A4 1ページに出ます。QRは何度でも使えるので、ふつうは1組で足ります。★同じQRは、あとから出し直せません。プリンターにつながる端末で発行してください（ホーム画面のアプリから印刷できないときは、ブラウザで開いてください）。</p>
+    <h2 class="l-h">発行して PDF を保存する</h2>
+    <p class="l-hint">1組で 1〜15ポイントのQRが1枚ずつ、A6 の PDF（15ページ）になります。QRは何度でも使えるので、ふつうは1組で足ります。★同じQRは、あとから出し直せません。PDF を保存したら、A6 で印刷して保管してください。PDF も紙と同じように、ほかの人に渡さないでください。ホーム画面のアプリから保存できないときは、ブラウザで開いてください。</p>
     <form id="issue" class="l-issue">
       <label for="sets">組の数</label>
       <select id="sets"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
@@ -79,7 +79,7 @@
     </form>
     <div id="issued" hidden>
       <p id="issuedNote" class="l-done"></p>
-      <button type="button" id="printBtn" class="l-btn">印刷する</button>
+      <button type="button" id="pdfBtn" class="l-btn">PDF を保存する</button>
     </div>
 
     <h2 class="l-h">使い方</h2>
@@ -95,7 +95,6 @@
   </section>
 </main>
 
-<div id="sheets" class="l-sheets"></div>   <!-- 印刷するQR。印刷のときだけ出る（css/line.css の @media print） -->
 
 <dialog id="pointDlg" class="l-dlg">
   <form id="ptForm" novalidate>
@@ -125,6 +124,7 @@
 </dialog>
 
 <script src="https://t3dining.github.io/baguru-app/js/data.js?v=379f8cc7"></script>   <!-- 公開するときは、公式アプリの公開先のものを読む（道具/公開する.py） -->
-<script src="js/line.js?v=15599d88"></script>
+<script src="js/line-pdf.js?v=3a8f5aa9"></script>
+<script src="js/line.js?v=aab5f34f"></script>
 </body>
 </html>

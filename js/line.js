@@ -3,7 +3,7 @@
  *  お客様が公式アプリに出した会員番号と、LINE のショップカードの画面を見せてもらい、番号で探して数を入れる。
  *  お客様の画面は6秒ほどで変わる（公式アプリの js/stamp-qr.js の openLineMove）。
  *  ・数を決めるのは受け口の台帳。ここは members で探して、lineGive・memberFix を送るだけ（../スタンプ台帳の決めごと.md の7節・9節）
- *  ・紙の QR（下の「紙の引き継ぎ券」）の発行と印刷もここ。券は何度でも使える。★コードは印刷するまで画面の中に持つだけで、どこにも保存しない
+ *  ・紙の QR（下の「紙の引き継ぎ券」）の発行もここ。A6 の PDF にして保存する（js/line-pdf.js）。券は何度でも使える。★コードは画面の中に持つだけで、受け口に残さない
  *  ・LINE の数は1会員1回なので、送る前に番号と数を確かめる画面を1つ挟む。手で直すときも同じ
  *  ・★電話番号は大きく出さない。電話番号で探したときの突き合わせに、下4けただけ小さく出す
  *  ・★api.js は、返事を読めないと黙って2回まで送り直す。1回目が入っていると lineGive は line_done で返るので、数が合えば入った扱いにする。
@@ -244,9 +244,9 @@ async function pointSend() {
 /* ---- 紙の引き継ぎ券（../スタンプ台帳の決めごと.md の10節）。ふだんは STAMP.memberPlus で切り替え。この Mac では ?test のときに出す ---- */
 const MEMBER_PLUS = !!STAMP.memberPlus || (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]test\b/.test(location.search));
 const QR_LIB = { src: 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', integrity: 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1' };   // 公式アプリの LIB.qrMake と同じ
-const PER_SET = LINE_MAX;     // 1組の枚数（1〜15を1枚ずつ）
 let issuing = null;           // 発行している組 { sets, rid }。返事が届かなくて押し直しても、同じ rid なら2組発行されない
-let unprinted = false;        // 発行して、まだ印刷していない
+let issued = [];              // 発行した券。PDF を作るあいだだけ、この画面の中に持つ
+let unsaved = false;          // 発行して、まだ PDF を保存していない
 
 function openTab(name) {
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
@@ -273,27 +273,25 @@ async function paintLeft() {
   }
 }
 
-/** 1枚の券。QR の中身の形は、公式アプリの ticketFrom と同じ */
-function ticketHtml(t) {
-  const q = qrcode(0, 'M');
-  q.addData(`BAGURULINE:${t.code}`);
-  q.make();
-  return `<div class="l-ticket">
-      <p class="t-head">炭焼ハンバーグ バグる LINE引き継ぎ</p>
-      <p class="t-n"><b>${t.n}</b>ポイント</p>
-      ${q.createSvgTag({ cellSize: 2, margin: 0, scalable: true })}
-      <p class="t-note">店員が見せて、読んだら回収</p>
-    </div>`;
-}
-function drawTickets(list) {
-  const pages = [];
-  for (let i = 0; i < list.length; i += PER_SET) pages.push(`<div class="l-page">${list.slice(i, i + PER_SET).map(ticketHtml).join('')}</div>`);
-  $('#sheets').innerHTML = pages.join('');
+/** 発行した券を A6 の PDF にして、この端末に保存する（js/line-pdf.js） */
+async function saveTickets() {
+  $('#pdfBtn').disabled = true;
+  paperSay();
+  try {
+    const url = URL.createObjectURL(await ticketPdf(issued));
+    Object.assign(document.createElement('a'), { href: url, download: 'バグるLINE引き継ぎQR_A6.pdf' }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    unsaved = false;
+  } catch (e) {
+    paperSay('', 'PDF を作れませんでした。もう一度お試しください。');
+  } finally {
+    $('#pdfBtn').disabled = false;
+  }
 }
 
 async function issueTickets() {
   const sets = Number($('#sets').value);
-  if (unprinted && !confirm('前に発行したQRが、まだ印刷されていません。新しく発行すると、前のQRは印刷できなくなります。続けますか？')) return;
+  if (unsaved && !confirm('前に発行したQRの PDF が、まだ保存されていません。新しく発行すると、前のQRは保存できなくなります。続けますか？')) return;
   if (issuing?.sets !== sets) issuing = { sets, rid: fixRid() };
   $('#issueBtn').disabled = true;
   paperSay();
@@ -301,9 +299,9 @@ async function issueTickets() {
     await loadJs(QR_LIB.src, QR_LIB.integrity);
     const r = await staffPost({ action: 'lineTickets', sets, rid: issuing.rid });
     issuing = null;
-    drawTickets(r.tickets);
-    unprinted = true;
-    $('#issuedNote').textContent = `${r.tickets.length}枚（${sets}組）発行しました。★この画面を閉じると、同じQRは出せません。続けて印刷してください。`;
+    issued = r.tickets;
+    unsaved = true;
+    $('#issuedNote').textContent = `${r.tickets.length}枚（${sets}組）発行しました。★この画面を閉じると、同じQRは出せません。続けて PDF を保存してください。`;
     $('#issued').hidden = false;
     showLeft(r.left || {});
   } catch (e) {
@@ -328,9 +326,8 @@ async function voidTickets() {
 /* ---- 押したとき ---- */
 $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) openTab(b.dataset.tab); });
 $('#issue').addEventListener('submit', e => { e.preventDefault(); issueTickets(); });
-$('#printBtn').addEventListener('click', () => window.print());
-addEventListener('afterprint', () => { unprinted = false; });
-addEventListener('beforeunload', e => { if (unprinted) { e.preventDefault(); e.returnValue = ''; } });
+$('#pdfBtn').addEventListener('click', saveTickets);
+addEventListener('beforeunload', e => { if (unsaved) { e.preventDefault(); e.returnValue = ''; } });
 $('#voidBtn').addEventListener('click', voidTickets);
 $('#find').addEventListener('submit', e => {
   e.preventDefault();

@@ -112,21 +112,3 @@ main { max-width: 620px; margin: 0 auto; padding: 14px 14px 0; }
 #issued .l-btn, #voidBtn { width: 100%; }
 .l-rules { margin: 0; padding-left: 20px; font-size: 13.5px; }
 .l-rules li { margin-bottom: 4px; }
-
-/* 印刷する紙：A4 たて、1ページに15枚（3列×5段）。点線で切る */
-.l-sheets { display: none; }
-@media print {
-  @page { size: A4 portrait; margin: 8mm; }
-  html, body { background: #fff; padding: 0; }
-  .l-top, main, .l-dlg { display: none !important; }
-  .l-sheets { display: block; }
-  .l-page { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(5, 1fr); height: 280mm; break-after: page; }
-  .l-page:last-child { break-after: auto; }
-  .l-ticket { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1mm; border: .3mm dashed #999; color: #000; overflow: hidden; }
-  .l-ticket p { margin: 0; line-height: 1.25; }
-  .t-head { font-size: 7.5pt; font-weight: 700; }
-  .t-n { font-size: 10pt; font-weight: 700; }
-  .t-n b { font-size: 19pt; }
-  .l-ticket svg { width: 35mm; height: 35mm; }
-  .t-note { font-size: 6.5pt; }
-}
