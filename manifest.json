@@ -1,0 +1,16 @@
+{
+  "name": "バグるLINE引き継ぎ",
+  "short_name": "LINE引き継ぎ",
+  "description": "炭焼ハンバーグ バグるの、LINE のショップカードのポイントをスタンプの台帳に入れる（お店の人用）",
+  "id": "./",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#faf6f0",
+  "theme_color": "#1f1916",
+  "lang": "ja",
+  "icons": [
+    { "src": "img/line-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/line-icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

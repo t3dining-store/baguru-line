@@ -1,0 +1,93 @@
+/* =====================================================================
+ *  バグるLINE引き継ぎ
+ *  ★見た目はこのファイルだけで完結させる。色の値はバグるマネージ（css/manage.css）と同じ
+ * ===================================================================== */
+:root {
+  --coal: #1f1916; --coal-3: #2c241f; --cream: #faf6f0; --paper: #fff; --brass: #b8914b; --brass-soft: #f2ebe1;
+  --ember: #c7361d; --ember-soft: #fbe9e4; --ink: #221c18; --sub: #675d55; --line: #e6dccf;
+  --green: #2a8553; --green-soft: #e4f3ea; --red: #c23a3a; --red-soft: #fbe8e6;
+  --jp: "Zen Kaku Gothic New", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; }
+body { background: var(--cream); color: var(--ink); font: 15px/1.6 var(--jp); -webkit-font-smoothing: antialiased; padding-bottom: calc(40px + var(--safe-b)); }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input { font: inherit; font-size: 16px; color: var(--ink); }
+[hidden] { display: none !important; }
+
+/* 上の帯：炭の黒（公式アプリ・マネージと同じ） */
+.l-top {
+  position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 8px;
+  padding: calc(8px + var(--safe-t)) 12px 8px; background: linear-gradient(180deg, var(--coal-3), var(--coal)); color: #fff;
+  box-shadow: 0 2px 0 var(--brass), 0 4px 14px rgba(10, 8, 7, .3);
+}
+.l-top h1 { flex: 1; display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; letter-spacing: .04em; min-width: 0; }
+.l-top h1 img { width: 30px; height: 30px; border-radius: 8px; }
+.l-top h1 span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.l-home { height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .35); font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+
+main { max-width: 620px; margin: 0 auto; padding: 14px 14px 0; }
+.l-hint { margin: 8px 2px; font-size: 13px; color: var(--sub); }
+.l-err { margin: 8px 0; color: var(--red); font-size: 13.5px; font-weight: 700; }
+.l-done { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: var(--green-soft); color: var(--green); font-size: 14px; font-weight: 700; }
+.l-foot { margin: 22px 2px 0; text-align: center; }
+.l-link { color: var(--sub); font-size: 12.5px; font-weight: 700; text-decoration: underline; }
+
+.l-btn { display: flex; align-items: center; justify-content: center; height: 46px; padding: 0 22px; border-radius: 999px; background: var(--ember); color: #fff; font-weight: 700; }
+.l-btn:disabled { opacity: .5; }
+.l-btn.l-sub { background: var(--paper); color: var(--coal); border: 1.5px solid var(--line); }
+
+/* 合言葉 */
+.l-login { max-width: 360px; margin: 30px auto 0; padding: 22px 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 16px; text-align: center; }
+.l-login h2 { margin: 0 0 4px; font-size: 18px; }
+.l-login p { margin: 0 0 14px; font-size: 13px; color: var(--sub); }
+.l-login .l-err { color: var(--red); margin: 10px 0 0; }
+.l-login input { width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 12px; text-align: center; letter-spacing: .2em; }
+.l-login .l-btn { width: 100%; margin-top: 12px; }
+
+/* 探す */
+.l-find { display: flex; gap: 8px; }
+.l-find input { flex: 1; min-width: 0; height: 46px; padding: 0 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--paper); font-family: var(--mono); font-weight: 700; letter-spacing: .06em; }
+.l-find input::placeholder { font-family: var(--jp); font-weight: 500; letter-spacing: 0; }
+.l-find .l-btn { flex: none; }
+
+.l-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.l-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 12px; margin-bottom: 10px; padding: 12px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+.l-row.none { display: block; color: var(--sub); text-align: center; font-size: 13px; }
+.l-no, .pt-no { font-family: var(--mono); font-weight: 800; color: var(--coal); letter-spacing: .06em; }
+.l-no { font-size: 21px; }
+.l-count { grid-row: span 2; text-align: right; font-weight: 700; font-size: 13px; }
+.l-count b { font-size: 26px; font-variant-numeric: tabular-nums; }
+.l-count small { display: block; color: var(--sub); font-size: 11.5px; font-weight: 500; }
+.l-name { font-size: 14px; }
+.l-name small { margin-left: 8px; color: var(--sub); font-size: 12px; }
+.l-tag { grid-column: 1 / -1; justify-self: start; margin-top: 4px; padding: 2px 10px; border-radius: 7px; background: var(--green-soft); color: var(--green); font-size: 12.5px; font-weight: 700; }
+.l-btns { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 8px; }
+.l-btns button { height: 44px; padding: 0 14px; border-radius: 10px; font-weight: 700; }
+.l-btns .b-line { flex: 1; background: var(--ember); color: #fff; }
+.l-btns .b-fix { margin-left: auto; background: var(--brass-soft); color: var(--coal); }
+
+/* 数を入れる窓 */
+.l-dlg { width: min(420px, calc(100vw - 28px)); padding: 18px 16px 16px; border: 0; border-radius: 16px; color: var(--ink); }
+.l-dlg::backdrop { background: rgba(20, 15, 12, .55); }
+.l-dlg h3 { margin: 0; font-size: 16px; text-align: center; }
+.pt-no { margin: 6px 0 0; font-size: 26px; text-align: center; }
+.pt-who { margin: 0 0 12px; font-size: 13px; color: var(--sub); text-align: center; }
+.l-seg { display: flex; gap: 6px; margin: 0 0 12px; }
+.l-seg label { flex: 1; }
+.l-seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.l-seg span { display: block; padding: 8px 6px; border-radius: 10px; background: var(--brass-soft); color: var(--coal); font-weight: 700; text-align: center; cursor: pointer; }
+.l-seg input:checked + span { background: var(--coal); color: #fff; }
+.l-seg input:focus-visible + span { outline: 2px solid var(--brass); outline-offset: 2px; }
+.l-field { display: flex; flex-direction: column; gap: 4px; margin: 0 0 12px; font-size: 13px; font-weight: 700; }
+.l-field input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; font-weight: 500; }
+.l-field input.pt-n { font-size: 26px; font-weight: 700; text-align: center; }
+.pt-ask { margin: 0 0 6px; text-align: center; color: var(--ember); font-weight: 700; }
+.pt-num { margin: 0; text-align: center; }
+.pt-num b { font-size: 32px; font-weight: 700; }
+.pt-after { margin: 0 0 8px; text-align: center; font-size: 15px; font-weight: 700; }
+.pt-warn { margin: 0 0 12px; padding: 8px 10px; border-radius: 10px; background: var(--brass-soft); font-size: 13.5px; }
+.pt-btns { display: flex; gap: 8px; }
+.pt-btns .l-btn { flex: 1; padding: 0 8px; }

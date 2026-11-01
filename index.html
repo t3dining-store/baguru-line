@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>
+  /* バグる Owner・バグる Staff の中から開いたとき（?from=owner）だけ、viewport-fit=cover を外す（バグるマネージと同じ。わけは バグる Owner の README） */
+  (function () {
+    var owner = /[?&]from=owner\b/.test(location.search);
+    try { owner = owner || sessionStorage.getItem('bg.fromOwner') === '1'; } catch (e) {}
+    if (!owner) return;
+    var v = document.querySelector('meta[name="viewport"]');
+    v.setAttribute('content', v.getAttribute('content').replace(/,\s*viewport-fit=cover/, ''));
+    addEventListener('pageshow', function (e) { if (!e.persisted) scrollTo(0, 0); });
+  })();
+</script>
+<meta name="robots" content="noindex, nofollow">   <!-- お店の人の画面なので、検索に出さない -->
+<meta name="theme-color" content="#1f1916">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LINE引き継ぎ">
+<title>バグるLINE引き継ぎ</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="img/line-icon-192.png">
+<link rel="apple-touch-icon" href="img/line-icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="css/line.css?v=31546232">
+</head>
+<body>
+<header class="l-top">
+  <button id="homeBtn" class="l-home" hidden>🏠 ホーム</button>
+  <h1><img src="img/line-icon-192.png" alt=""><span>バグるLINE引き継ぎ</span></h1>
+</header>
+
+<main>
+  <p id="wait" class="l-hint">読み込んでいます…</p>
+
+  <form id="login" class="l-login" hidden>
+    <h2>合言葉を入れてください</h2>
+    <p>予約ボード・Order受付と同じ合言葉です。1度入れると、この端末では次から入れなくて済みます。</p>
+    <input id="pin" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false" maxlength="40" aria-label="合言葉">
+    <p id="loginErr" class="l-err" hidden></p>
+    <button id="loginBtn" class="l-btn">開く</button>
+  </form>
+
+  <section id="app" hidden>
+    <form id="find" class="l-find">
+      <input id="q" maxlength="40" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="探す言葉" placeholder="例：M2A4">
+      <button id="findBtn" class="l-btn">探す</button>
+    </form>
+    <p class="l-hint">お客様のアプリに出ている会員番号を入れます。番号の一部、電話番号（4けた以上）、お名前でも探せます。何も入れずに探すと、最近動いた順に30人出ます。</p>
+    <p id="done" class="l-done" hidden></p>
+    <p id="err" class="l-err" hidden></p>
+    <p id="count" class="l-hint" hidden></p>
+    <ul id="list" class="l-list"></ul>
+    <p class="l-foot"><button type="button" id="forget" class="l-link">この端末の合言葉を消す</button></p>
+  </section>
+</main>
+
+<dialog id="pointDlg" class="l-dlg">
+  <form id="ptForm" novalidate>
+    <h3 id="ptTitle"></h3>
+    <p id="ptNo" class="pt-no"></p>
+    <p id="ptWho" class="pt-who"></p>
+    <div id="ptInput">
+      <div id="ptSign" class="l-seg">
+        <label><input type="radio" name="ptSign" value="1" checked><span>足す</span></label>
+        <label><input type="radio" name="ptSign" value="-1"><span>減らす</span></label>
+      </div>
+      <label class="l-field"><span id="ptLabel"></span><input id="ptN" class="pt-n" type="number" min="1" step="1" inputmode="numeric"></label>
+      <label id="ptNoteRow" class="l-field"><span>書き置き（なくても構いません。お客様には見えません）</span><input id="ptNote" maxlength="100" autocomplete="off"></label>
+    </div>
+    <div id="ptCheck" hidden>
+      <p id="ptAsk" class="pt-ask"></p>
+      <p class="pt-num"><b id="ptShow"></b></p>
+      <p id="ptAfter" class="pt-after"></p>
+      <p id="ptWarn" class="pt-warn"></p>
+    </div>
+    <p id="ptErr" class="l-err" hidden></p>
+    <div class="pt-btns">
+      <button type="button" id="ptBack" class="l-btn l-sub">やめる</button>
+      <button id="ptOk" class="l-btn">確かめる</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://t3dining.github.io/baguru-app/js/data.js?v=9cb24f50"></script>   <!-- 公開するときは、公式アプリの公開先のものを読む（道具/公開する.py） -->
+<script src="js/line.js?v=50159a04"></script>
+</body>
+</html>
