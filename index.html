@@ -64,14 +64,14 @@
   </section>
 
   <section id="paper" hidden>
-    <h2 class="l-h">紙のQRの残り</h2>
+    <h2 class="l-h">使える紙のQR</h2>
     <div id="left" class="l-left"></div>
     <p id="leftNote" class="l-hint"></p>
     <p id="pDone" class="l-done" hidden></p>
     <p id="pErr" class="l-err" hidden></p>
 
     <h2 class="l-h">発行して印刷する</h2>
-    <p class="l-hint">1組で 1〜15ポイントのQRが1枚ずつ、A4 1ページに出ます。★発行したQRは、あとから出し直せません。プリンターにつながる端末で発行してください（ホーム画面のアプリから印刷できないときは、ブラウザで開いてください）。</p>
+    <p class="l-hint">1組で 1〜15ポイントのQRが1枚ずつ、A4 1ページに出ます。QRは何度でも使えるので、ふつうは1組で足ります。★同じQRは、あとから出し直せません。プリンターにつながる端末で発行してください（ホーム画面のアプリから印刷できないときは、ブラウザで開いてください）。</p>
     <form id="issue" class="l-issue">
       <label for="sets">組の数</label>
       <select id="sets"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
@@ -86,12 +86,12 @@
     <ul class="l-rules">
       <li>LINE の画面を見て、同じ数のQRをお客様に見せます。カウンターに置いたままにしません。</li>
       <li>お客様が公式アプリの「LINEのポイントカードをお持ちの方」→「紙のQRを読む」で読みます。スマホのカメラアプリでは読めません。</li>
-      <li>読んだら回収して捨てます。★QRは1枚1回で、使い回せません。</li>
-      <li>読めないと言われたら、お客様の会員番号を「会員を探す」で探して、数を入れます。</li>
+      <li>読んだら回収して、レジの内側にしまいます。QRは何度でも使えます。引き継ぎは1人1回だけで、2回目はアプリが断ります。</li>
+      <li>読めないときは、お客様の会員番号を「会員を探す」で探して、数を入れます。</li>
     </ul>
 
     <h2 class="l-h">紙をなくしたとき・引き継ぎを終えるとき</h2>
-    <button type="button" id="voidBtn" class="l-btn l-sub">まだ使っていないQRを全部無効にする</button>
+    <button type="button" id="voidBtn" class="l-btn l-sub">いま使えるQRを全部無効にする</button>
   </section>
 </main>
 
@@ -125,6 +125,6 @@
 </dialog>
 
 <script src="https://t3dining.github.io/baguru-app/js/data.js?v=17d85e39"></script>   <!-- 公開するときは、公式アプリの公開先のものを読む（道具/公開する.py） -->
-<script src="js/line.js?v=374a7086"></script>
+<script src="js/line.js?v=e6af6e0f"></script>
 </body>
 </html>

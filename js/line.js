@@ -3,7 +3,7 @@
  *  お客様が公式アプリに出した会員番号と、LINE のショップカードの画面を見せてもらい、番号で探して数を入れる。
  *  お客様の画面は6秒ほどで変わる（公式アプリの js/stamp-qr.js の openLineMove）。
  *  ・数を決めるのは受け口の台帳。ここは members で探して、lineGive・memberFix を送るだけ（../スタンプ台帳の決めごと.md の7節・9節）
- *  ・紙の QR（下の「紙の引き継ぎ券」）の発行と印刷もここ。1枚1回。★コードは印刷するまで画面の中に持つだけで、どこにも保存しない
+ *  ・紙の QR（下の「紙の引き継ぎ券」）の発行と印刷もここ。券は何度でも使える。★コードは印刷するまで画面の中に持つだけで、どこにも保存しない
  *  ・LINE の数は1会員1回なので、送る前に番号と数を確かめる画面を1つ挟む。手で直すときも同じ
  *  ・★電話番号は大きく出さない。電話番号で探したときの突き合わせに、下4けただけ小さく出す
  *  ・★api.js は、返事を読めないと黙って2回まで送り直す。1回目が入っていると lineGive は line_done で返るので、数が合えば入った扱いにする。
@@ -258,7 +258,7 @@ function paperSay(ok = '', ng = '') {
 const leftHtml = left => Array.from({ length: LINE_MAX }, (_, i) => `<span class="${left[i + 1] ? '' : 'none'}"><em>${i + 1}</em><b>${left[i + 1] || 0}</b></span>`).join('');
 function showLeft(left, used) {
   $('#left').innerHTML = leftHtml(left);
-  $('#leftNote').textContent = `上が数、下が残りの枚数です${used === undefined ? '' : `（これまでに読まれた券 ${used}枚）`}。`;
+  $('#leftNote').textContent = `上が数、下が使える枚数です${used === undefined ? '' : `（これまでに読まれた回数 ${used}回）`}。`;
 }
 async function paintLeft() {
   paperSay();
@@ -279,7 +279,7 @@ function ticketHtml(t) {
       <p class="t-head">炭焼ハンバーグ バグる LINE引き継ぎ</p>
       <p class="t-n"><b>${t.n}</b>ポイント</p>
       ${q.createSvgTag({ cellSize: 2, margin: 0, scalable: true })}
-      <p class="t-note">店員が見せて、読んだら回収（1回限り）</p>
+      <p class="t-note">店員が見せて、読んだら回収</p>
     </div>`;
 }
 function drawTickets(list) {
@@ -300,7 +300,7 @@ async function issueTickets() {
     issuing = null;
     drawTickets(r.tickets);
     unprinted = true;
-    $('#issuedNote').textContent = `${r.tickets.length}枚（${sets}組）発行しました。★この画面を閉じると、2度と出せません。続けて印刷してください。`;
+    $('#issuedNote').textContent = `${r.tickets.length}枚（${sets}組）発行しました。★この画面を閉じると、同じQRは出せません。続けて印刷してください。`;
     $('#issued').hidden = false;
     showLeft(r.left || {});
   } catch (e) {
@@ -311,7 +311,7 @@ async function issueTickets() {
 }
 
 async function voidTickets() {
-  if (!confirm('まだ使っていないQRを全部無効にします。印刷した紙は、全部読めなくなります。よろしいですか？')) return;
+  if (!confirm('いま使えるQRを全部無効にします。印刷した紙は、全部読めなくなります。よろしいですか？')) return;
   paperSay();
   try {
     const r = await staffPost({ action: 'lineTicketVoid' });
