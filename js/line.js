@@ -3,6 +3,7 @@
  *  お客様が公式アプリに出した会員番号と、LINE のショップカードの画面を見せてもらい、番号で探して数を入れる。
  *  お客様の画面は6秒ほどで変わる（公式アプリの js/stamp-qr.js の openLineMove）。
  *  ・数を決めるのは受け口の台帳。ここは members で探して、lineGive・memberFix を送るだけ（../スタンプ台帳の決めごと.md の7節・9節）
+ *  ・紙の QR（下の「紙の引き継ぎ券」）の発行と印刷もここ。1枚1回。★コードは印刷するまで画面の中に持つだけで、どこにも保存しない
  *  ・LINE の数は1会員1回なので、送る前に番号と数を確かめる画面を1つ挟む。手で直すときも同じ
  *  ・★電話番号は大きく出さない。電話番号で探したときの突き合わせに、下4けただけ小さく出す
  *  ・★api.js は、返事を読めないと黙って2回まで送り直す。1回目が入っていると lineGive は line_done で返るので、数が合えば入った扱いにする。
@@ -12,6 +13,7 @@
  * ===================================================================== */
 
 const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /* ---- バグる Owner・バグる Staff から開いたときだけ「🏠 ホーム」（Order受付と同じ印。わけは バグるOrder受付/js/store.js の頭） ---- */
@@ -38,8 +40,9 @@ if (FROM_OWNER) {
 
 /* ---- 受け口（予約ボードの公開先の config.js・api.js を読む。公式アプリ・マネージと同じ） ---- */
 const LOADED = {};
-const loadJs = src => (LOADED[src] ??= new Promise((ok, ng) => {
+const loadJs = (src, integrity = '') => (LOADED[src] ??= new Promise((ok, ng) => {
   const s = document.createElement('script');
+  if (integrity) Object.assign(s, { integrity, crossOrigin: 'anonymous' });
   Object.assign(s, { src, onload: ok, onerror: () => { delete LOADED[src]; s.remove(); ng(Object.assign(new Error('offline'), { code: 'offline' })); } });
   document.head.append(s);
 }));
@@ -80,6 +83,8 @@ let pointing = null;    // 入れている数 { kind: 'line' か 'fix', m: 会�
 /* ---- 画面 ---- */
 function show(signedIn, loginText = '') {
   $('#wait').hidden = true;
+  $('#tabs').hidden = !signedIn || !LINE_TICKETS;
+  openTab('app');
   $('#app').hidden = !signedIn;
   $('#login').hidden = signedIn;
   $('#loginErr').textContent = loginText;
@@ -233,7 +238,97 @@ async function pointSend() {
   }
 }
 
+/* ---- 紙の引き継ぎ券（../スタンプ台帳の決めごと.md の10節）。ふだんは STAMP.lineTicket で切り替え。この Mac では ?test のときに出す ---- */
+const LINE_TICKETS = !!STAMP.lineTicket || (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]test\b/.test(location.search));
+const QR_LIB = { src: 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', integrity: 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1' };   // 公式アプリの LIB.qrMake と同じ
+const PER_SET = LINE_MAX;     // 1組の枚数（1〜15を1枚ずつ）
+let issuing = null;           // 発行している組 { sets, rid }。返事が届かなくて押し直しても、同じ rid なら2組発行されない
+let unprinted = false;        // 発行して、まだ印刷していない
+
+function openTab(name) {
+  $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  $('#app').hidden = name !== 'app';
+  $('#paper').hidden = name !== 'paper';
+  if (name === 'paper') paintLeft();
+}
+function paperSay(ok = '', ng = '') {
+  $('#pDone').textContent = ok; $('#pDone').hidden = !ok;
+  $('#pErr').textContent = ng; $('#pErr').hidden = !ng;
+}
+const leftHtml = left => Array.from({ length: LINE_MAX }, (_, i) => `<span class="${left[i + 1] ? '' : 'none'}"><em>${i + 1}</em><b>${left[i + 1] || 0}</b></span>`).join('');
+function showLeft(left, used) {
+  $('#left').innerHTML = leftHtml(left);
+  $('#leftNote').textContent = `上が数、下が残りの枚数です${used === undefined ? '' : `（これまでに読まれた券 ${used}枚）`}。`;
+}
+async function paintLeft() {
+  paperSay();
+  try {
+    const r = await staffPost({ action: 'lineTicketInfo' });
+    showLeft(r.left || {}, r.used);
+  } catch (e) {
+    fail(e, text => paperSay('', text));
+  }
+}
+
+/** 1枚の券。QR の中身の形は、公式アプリの ticketFrom と同じ */
+function ticketHtml(t) {
+  const q = qrcode(0, 'M');
+  q.addData(`BAGURULINE:${t.code}`);
+  q.make();
+  return `<div class="l-ticket">
+      <p class="t-head">炭焼ハンバーグ バグる LINE引き継ぎ</p>
+      <p class="t-n"><b>${t.n}</b>ポイント</p>
+      ${q.createSvgTag({ cellSize: 2, margin: 0, scalable: true })}
+      <p class="t-note">店員が見せて、読んだら回収（1回限り）</p>
+    </div>`;
+}
+function drawTickets(list) {
+  const pages = [];
+  for (let i = 0; i < list.length; i += PER_SET) pages.push(`<div class="l-page">${list.slice(i, i + PER_SET).map(ticketHtml).join('')}</div>`);
+  $('#sheets').innerHTML = pages.join('');
+}
+
+async function issueTickets() {
+  const sets = Number($('#sets').value);
+  if (unprinted && !confirm('前に発行したQRが、まだ印刷されていません。新しく発行すると、前のQRは印刷できなくなります。続けますか？')) return;
+  if (issuing?.sets !== sets) issuing = { sets, rid: fixRid() };
+  $('#issueBtn').disabled = true;
+  paperSay();
+  try {
+    await loadJs(QR_LIB.src, QR_LIB.integrity);
+    const r = await staffPost({ action: 'lineTickets', sets, rid: issuing.rid });
+    issuing = null;
+    drawTickets(r.tickets);
+    unprinted = true;
+    $('#issuedNote').textContent = `${r.tickets.length}枚（${sets}組）発行しました。★この画面を閉じると、2度と出せません。続けて印刷してください。`;
+    $('#issued').hidden = false;
+    showLeft(r.left || {});
+  } catch (e) {
+    fail(e, text => paperSay('', text));
+  } finally {
+    $('#issueBtn').disabled = false;
+  }
+}
+
+async function voidTickets() {
+  if (!confirm('まだ使っていないQRを全部無効にします。印刷した紙は、全部読めなくなります。よろしいですか？')) return;
+  paperSay();
+  try {
+    const r = await staffPost({ action: 'lineTicketVoid' });
+    showLeft(r.left || {});
+    paperSay(`${r.voided}枚を無効にしました。`);
+  } catch (e) {
+    fail(e, text => paperSay('', text));
+  }
+}
+
 /* ---- 押したとき ---- */
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) openTab(b.dataset.tab); });
+$('#issue').addEventListener('submit', e => { e.preventDefault(); issueTickets(); });
+$('#printBtn').addEventListener('click', () => window.print());
+addEventListener('afterprint', () => { unprinted = false; });
+addEventListener('beforeunload', e => { if (unprinted) { e.preventDefault(); e.returnValue = ''; } });
+$('#voidBtn').addEventListener('click', voidTickets);
 $('#find').addEventListener('submit', e => {
   e.preventDefault();
   say();

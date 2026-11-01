@@ -91,3 +91,41 @@ main { max-width: 620px; margin: 0 auto; padding: 14px 14px 0; }
 .pt-warn { margin: 0 0 12px; padding: 8px 10px; border-radius: 10px; background: var(--brass-soft); font-size: 13.5px; }
 .pt-btns { display: flex; gap: 8px; }
 .pt-btns .l-btn { flex: 1; padding: 0 8px; }
+
+/* タブ（紙のQR） */
+.l-tabs { display: flex; gap: 6px; margin: 0 0 12px; }
+.l-tabs button { flex: 1; height: 38px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); font-size: 14px; font-weight: 700; }
+.l-tabs button.on { background: var(--coal); border-color: var(--coal); color: #fff; }
+.l-h { margin: 18px 2px 6px; padding-left: 8px; border-left: 3px solid var(--ember); font-size: 15px; }
+.l-h:first-child { margin-top: 4px; }
+.l-left { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.l-left span { display: flex; flex-direction: column; align-items: center; padding: 6px 2px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; }
+.l-left em { font-style: normal; font-size: 12px; color: var(--sub); }
+.l-left b { font-size: 19px; font-variant-numeric: tabular-nums; }
+.l-left span.none { background: var(--red-soft); border-color: var(--red-soft); }
+.l-left span.none b { color: var(--red); }
+.l-issue { display: flex; align-items: center; gap: 8px; }
+.l-issue label { font-size: 14px; font-weight: 700; }
+.l-issue select { height: 46px; padding: 0 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--paper); font: inherit; font-size: 16px; color: var(--ink); }
+.l-issue .l-btn { flex: 1; }
+#issued .l-btn, #voidBtn { width: 100%; }
+.l-rules { margin: 0; padding-left: 20px; font-size: 13.5px; }
+.l-rules li { margin-bottom: 4px; }
+
+/* 印刷する紙：A4 たて、1ページに15枚（3列×5段）。点線で切る */
+.l-sheets { display: none; }
+@media print {
+  @page { size: A4 portrait; margin: 8mm; }
+  html, body { background: #fff; padding: 0; }
+  .l-top, main, .l-dlg { display: none !important; }
+  .l-sheets { display: block; }
+  .l-page { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(5, 1fr); height: 280mm; break-after: page; }
+  .l-page:last-child { break-after: auto; }
+  .l-ticket { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1mm; border: .3mm dashed #999; color: #000; overflow: hidden; }
+  .l-ticket p { margin: 0; line-height: 1.25; }
+  .t-head { font-size: 7.5pt; font-weight: 700; }
+  .t-n { font-size: 10pt; font-weight: 700; }
+  .t-n b { font-size: 19pt; }
+  .l-ticket svg { width: 35mm; height: 35mm; }
+  .t-note { font-size: 6.5pt; }
+}
