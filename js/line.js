@@ -55,6 +55,7 @@ const MSG = {
   locked: '何度も違ったため、しばらく使えません。時間を置いてから、もう一度お試しください。',
   not_found: 'この番号の会員が見つかりませんでした。番号を確かめて、探し直してください。',
   line_done: 'この会員は、LINE の引き継ぎが済んでいます。',
+  need_register: 'この会員は登録がまだです。お客様のアプリで、先にお名前と電話番号を登録してもらってください。',
   bad_input: '入れた数を確かめてください。',
   busy: '受け口が混み合っています。少し待って、もう一度お試しください。',
   not_ready: '受け口の場所を読めませんでした。少し時間を置いてから、もう一度お試しください。',
@@ -83,7 +84,7 @@ let pointing = null;    // 入れている数 { kind: 'line' か 'fix', m: 会�
 /* ---- 画面 ---- */
 function show(signedIn, loginText = '') {
   $('#wait').hidden = true;
-  $('#tabs').hidden = !signedIn || !LINE_TICKETS;
+  $('#tabs').hidden = !signedIn || !MEMBER_PLUS;
   openTab('app');
   $('#app').hidden = !signedIn;
   $('#login').hidden = signedIn;
@@ -125,15 +126,17 @@ async function findMembers(q = $('#q').value) {
   }
 }
 
+const needsRegister = m => MEMBER_PLUS && !m.registeredAt;   // LINE の引き継ぎは登録した人だけ（../スタンプ台帳の決めごと.md の11節）
+
 function rowHtml(m) {
   const tel = /^\d{4,}$/.test(asked) && m.tel ? `<small>電話 …${esc(m.tel.slice(-4))}</small>` : '';
   return `<li class="l-row">
       <b class="l-no">${esc(m.no)}</b>
       <div class="l-count"><b>${onCard(m.total)}</b>個${m.total > STAMP.goal ? `<small>累計${m.total}個</small>` : ''}</div>
       <span class="l-name">${m.name ? `${esc(m.name)} 様` : '名前の登録なし'}${tel}</span>
-      ${m.lineMovedAt ? `<span class="l-tag">✓ LINE は引き継ぎ済み（${dayText(m.lineMovedAt)}）</span>` : ''}
+      ${m.lineMovedAt ? `<span class="l-tag">✓ LINE は引き継ぎ済み（${dayText(m.lineMovedAt)}）</span>` : needsRegister(m) ? '<span class="l-tag warn">登録がまだなので、LINE の数は入れられません</span>' : ''}
       <div class="l-btns">
-        ${m.lineMovedAt ? '' : `<button type="button" class="b-line" data-point="line" data-no="${esc(m.no)}">LINE の数を入れる</button>`}
+        ${m.lineMovedAt || needsRegister(m) ? '' : `<button type="button" class="b-line" data-point="line" data-no="${esc(m.no)}">LINE の数を入れる</button>`}
         <button type="button" class="b-fix" data-point="fix" data-no="${esc(m.no)}">数を直す</button>
       </div>
     </li>`;
@@ -238,8 +241,8 @@ async function pointSend() {
   }
 }
 
-/* ---- 紙の引き継ぎ券（../スタンプ台帳の決めごと.md の10節）。ふだんは STAMP.lineTicket で切り替え。この Mac では ?test のときに出す ---- */
-const LINE_TICKETS = !!STAMP.lineTicket || (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]test\b/.test(location.search));
+/* ---- 紙の引き継ぎ券（../スタンプ台帳の決めごと.md の10節）。ふだんは STAMP.memberPlus で切り替え。この Mac では ?test のときに出す ---- */
+const MEMBER_PLUS = !!STAMP.memberPlus || (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]test\b/.test(location.search));
 const QR_LIB = { src: 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', integrity: 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1' };   // 公式アプリの LIB.qrMake と同じ
 const PER_SET = LINE_MAX;     // 1組の枚数（1〜15を1枚ずつ）
 let issuing = null;           // 発行している組 { sets, rid }。返事が届かなくて押し直しても、同じ rid なら2組発行されない
