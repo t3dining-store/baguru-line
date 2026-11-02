@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="css/line.css?v=d5f35c57">
+<link rel="stylesheet" href="css/line.css?v=8980d129">
 </head>
 <body>
 <header class="l-top">
@@ -38,8 +38,8 @@
   <p id="wait" class="l-hint">読み込んでいます…</p>
 
   <nav id="tabs" class="l-tabs" hidden>
-    <button type="button" data-tab="app" class="on">会員を探す</button>
-    <button type="button" data-tab="paper">紙のQR</button>
+    <button type="button" data-tab="paper" class="on">紙のQR</button>
+    <button type="button" data-tab="app">数を直す</button>
   </nav>
 
   <form id="login" class="l-login" hidden>
@@ -55,7 +55,7 @@
       <input id="q" maxlength="40" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="探す言葉" placeholder="例：M2A4">
       <button id="findBtn" class="l-btn">探す</button>
     </form>
-    <p class="l-hint">お客様のアプリに出ている会員番号を入れます。番号の一部、電話番号（4けた以上）、お名前でも探せます。何も入れずに探すと、最近動いた順に30人出ます。</p>
+    <p class="l-hint">数を間違えたときなどに、会員を探して数を直します（LINE の引き継ぎは「紙のQR」だけです）。会員番号はお客様のアプリのマイページに出ています。番号の一部、電話番号（4けた以上）、お名前でも探せます。何も入れずに探すと、最近動いた順に30人出ます。</p>
     <p id="done" class="l-done" hidden></p>
     <p id="err" class="l-err" hidden></p>
     <p id="count" class="l-hint" hidden></p>
@@ -85,9 +85,9 @@
     <h2 class="l-h">使い方</h2>
     <ul class="l-rules">
       <li>LINE の画面を見て、同じ数のQRをお客様に見せます。カウンターに置いたままにしません。引き継げるのは会員登録をした方だけです。</li>
-      <li>お客様が公式アプリの「LINEのポイントカードをお持ちの方」→「紙のQRを読む」で読みます。スマホのカメラアプリでは読めません。</li>
+      <li>お客様が公式アプリのスタンプの「LINEのポイントカードをお持ちの方」を押して読みます。スマホのカメラアプリでは読めません。</li>
       <li>読んだら回収して、レジの内側にしまいます。QRは何度でも使えます。引き継ぎは1人1回だけで、2回目はアプリが断ります。</li>
-      <li>読めないときは、お客様の会員番号を「会員を探す」で探して、数を入れます。</li>
+      <li>LINE の引き継ぎは、このQRだけです。読めないときは、明るい所でQRを枠の中に大きく入れてもらいます。カメラが使えないスマホでは引き継げません。</li>
     </ul>
 
     <h2 class="l-h">紙をなくしたとき・引き継ぎを終えるとき</h2>
@@ -123,8 +123,8 @@
   </form>
 </dialog>
 
-<script src="https://t3dining.github.io/baguru-app/js/data.js?v=278298a3"></script>   <!-- 公開するときは、公式アプリの公開先のものを読む（道具/公開する.py） -->
+<script src="https://t3dining.github.io/baguru-app/js/data.js?v=517ad277"></script>   <!-- 公開するときは、公式アプリの公開先のものを読む（道具/公開する.py） -->
 <script src="js/line-pdf.js?v=3a8f5aa9"></script>
-<script src="js/line.js?v=aab5f34f"></script>
+<script src="js/line.js?v=cb5853d4"></script>
 </body>
 </html>

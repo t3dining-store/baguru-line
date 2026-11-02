@@ -1,13 +1,11 @@
 /* =====================================================================
- *  バグるLINE引き継ぎ（LINE のポイントの数を、スタンプの台帳に入れる。2026-11-02 ko-dai さんの指示）
- *  お客様が公式アプリに出した会員番号と、LINE のショップカードの画面を見せてもらい、番号で探して数を入れる。
- *  お客様の画面は6秒ほどで変わる（公式アプリの js/stamp-qr.js の openLineMove）。
- *  ・数を決めるのは受け口の台帳。ここは members で探して、lineGive・memberFix を送るだけ（../スタンプ台帳の決めごと.md の7節・9節）
- *  ・紙の QR（下の「紙の引き継ぎ券」）の発行もここ。A6 の PDF にして保存する（js/line-pdf.js）。券は何度でも使える。★コードは画面の中に持つだけで、受け口に残さない
- *  ・LINE の数は1会員1回なので、送る前に番号と数を確かめる画面を1つ挟む。手で直すときも同じ
+ *  バグるLINE引き継ぎ（LINE のポイントを、スタンプの台帳に引き継ぐためのお店の人用のアプリ。2026-11-02 ko-dai さんの指示）
+ *  ・LINE の引き継ぎは紙の QR だけ（下の「紙の引き継ぎ券」。2026-11-02 ko-dai さんの指示で、会員番号で探して数を入れる形はやめた）。
+ *    A6 の PDF にして保存する（js/line-pdf.js）。券は何度でも使える。★コードは画面の中に持つだけで、受け口に残さない
+ *  ・「会員を探す」は、数を直すとき（memberFix）だけ。数を決めるのは受け口の台帳（../スタンプ台帳の決めごと.md の7節・9節）
+ *  ・送る前に番号と数を確かめる画面を1つ挟む
  *  ・★電話番号は大きく出さない。電話番号で探したときの突き合わせに、下4けただけ小さく出す
- *  ・★api.js は、返事を読めないと黙って2回まで送り直す。1回目が入っていると lineGive は line_done で返るので、数が合えば入った扱いにする。
- *    memberFix は rid を付けて送る（受け口の版 2026-11-02a から）。返ってきた数が違えば知らせる
+ *  ・★api.js は、返事を読めないと黙って2回まで送り直す。memberFix は rid を付けて送る（受け口の版 2026-11-02a から）。返ってきた数が違えば知らせる
  *  ・合言葉は予約ボード・Order受付・マネージと同じ置き場所（localStorage の baguru.daicho.pin）。1度入れたら、この端末に覚える
  *  ・★この Mac で試すときは、にせの受け口（プレビュー「予約の受け口（試し）」）から ?test を付けて開く。本物で試さない
  * ===================================================================== */
@@ -54,7 +52,6 @@ const MSG = {
   bad_pin: '合言葉が違います。',
   locked: '何度も違ったため、しばらく使えません。時間を置いてから、もう一度お試しください。',
   not_found: 'この番号の会員が見つかりませんでした。番号を確かめて、探し直してください。',
-  line_done: 'この会員は、LINE の引き継ぎが済んでいます。',
   need_register: 'この会員は登録がまだです。お客様のアプリで、先にお名前と電話番号を登録してもらってください。',
   bad_input: '入れた数を確かめてください。',
   busy: '受け口が混み合っています。少し待って、もう一度お試しください。',
@@ -79,18 +76,17 @@ const fixRid = () => 'f' + [...crypto.getRandomValues(new Uint8Array(16))].map(b
 
 let members = [];       // 探した会員（受け口の形）
 let asked = '';         // 探した言葉（電話番号で探したときだけ、下4けたを出す）
-let pointing = null;    // 入れている数 { kind: 'line' か 'fix', m: 会員, n: 入れる数（減らすときはマイナス）, note, rid }
+let pointing = null;    // 直している数 { m: 会員, n: 足す数（減らすときはマイナス）, note, rid }
 
 /* ---- 画面 ---- */
 function show(signedIn, loginText = '') {
   $('#wait').hidden = true;
   $('#tabs').hidden = !signedIn || !MEMBER_PLUS;
-  openTab('app');
-  $('#app').hidden = !signedIn;
   $('#login').hidden = signedIn;
   $('#loginErr').textContent = loginText;
   $('#loginErr').hidden = !loginText;
-  if (signedIn) $('#q').focus(); else $('#pin').focus();
+  if (!signedIn) { $('#app').hidden = $('#paper').hidden = true; return $('#pin').focus(); }
+  openTab(MEMBER_PLUS ? 'paper' : 'app');   // ふだんは紙のQRから（引き継ぎは紙のQRだけ）
 }
 
 function say(ok = '', ng = '') {
@@ -134,9 +130,8 @@ function rowHtml(m) {
       <b class="l-no">${esc(m.no)}</b>
       <div class="l-count"><b>${onCard(m.total)}</b>個${m.total > STAMP.goal ? `<small>累計${m.total}個</small>` : ''}</div>
       <span class="l-name">${m.name ? `${esc(m.name)} 様` : '名前の登録なし'}${tel}</span>
-      ${m.lineMovedAt ? `<span class="l-tag">✓ LINE は引き継ぎ済み（${dayText(m.lineMovedAt)}）</span>` : needsRegister(m) ? '<span class="l-tag warn">登録がまだなので、LINE の数は入れられません</span>' : ''}
+      ${m.lineMovedAt ? `<span class="l-tag">✓ LINE は引き継ぎ済み（${dayText(m.lineMovedAt)}）</span>` : needsRegister(m) ? '<span class="l-tag warn">登録がまだなので、LINE の引き継ぎはできません</span>' : ''}
       <div class="l-btns">
-        ${m.lineMovedAt || needsRegister(m) ? '' : `<button type="button" class="b-line" data-point="line" data-no="${esc(m.no)}">LINE の数を入れる</button>`}
         <button type="button" class="b-fix" data-point="fix" data-no="${esc(m.no)}">数を直す</button>
       </div>
     </li>`;
@@ -155,15 +150,13 @@ function putMember(row) {
   paint(members.length);
 }
 
-function openPoint(kind, m) {
-  const line = kind === 'line';
-  pointing = { kind, m, n: 0, note: '', rid: fixRid() };
-  $('#ptTitle').textContent = line ? 'LINE のポイントの数を入れる' : '数を直す';
+function openPoint(m) {
+  pointing = { m, n: 0, note: '', rid: fixRid() };
+  $('#ptTitle').textContent = '数を直す';
   $('#ptNo').textContent = m.no;
   $('#ptWho').textContent = `${m.name ? `${m.name} 様` : '名前の登録なし'}・いま ${stampCount(m.total)}`;
-  $('#ptSign').hidden = $('#ptNoteRow').hidden = line;
-  $('#ptLabel').textContent = line ? `LINE のショップカードの数（1〜${LINE_MAX}）` : `直す数（1〜${FIX_MAX}）`;
-  $('#ptN').max = line ? LINE_MAX : FIX_MAX;
+  $('#ptLabel').textContent = `直す数（1〜${FIX_MAX}）`;
+  $('#ptN').max = FIX_MAX;
   $('#ptN').value = '';
   $('#ptNote').value = '';
   $('#pointDlg input[name="ptSign"][value="1"]').checked = true;
@@ -180,28 +173,24 @@ function pointStep(step) {
   pointErr('');
   $('#ptBack').disabled = $('#ptOk').disabled = false;
   if (step === 1) { $('#ptOk').textContent = '確かめる'; return; }
-  const { kind, m, n } = pointing;
-  const line = kind === 'line';
+  const { m, n } = pointing;
   const after = Math.max(0, m.total + n);
-  $('#ptAsk').textContent = line ? 'お客様の画面と見くらべてください' : '番号と数を確かめてください';
-  $('#ptShow').textContent = line ? `LINE の数 ${n}ポイント` : `${n > 0 ? '+' : '−'}${Math.abs(n)}個`;
+  $('#ptAsk').textContent = '番号と数を確かめてください';
+  $('#ptShow').textContent = `${n > 0 ? '+' : '−'}${Math.abs(n)}個`;
   $('#ptAfter').textContent = `いま ${stampCount(m.total)} → ${stampCount(after)}`;
-  $('#ptWarn').textContent = line ? '★1人1回だけです。入れたあとは、やり直せません（間違えたら「数を直す」で直します）。特典券は出ません。'
-    : '特典券は出ません。お客様のアプリの数も変わります。';
-  $('#ptOk').textContent = line ? `${n}ポイント入れる` : 'この数に直す';
+  $('#ptWarn').textContent = '特典券は出ません。お客様のアプリの数も変わります。';
+  $('#ptOk').textContent = 'この数に直す';
 }
 
 /** 数を読んで、確かめる画面へ。読めなければ、わけを出す */
 function pointRead() {
-  const { kind, m } = pointing;
-  const line = kind === 'line';
-  const max = line ? LINE_MAX : FIX_MAX;
+  const { m } = pointing;
   const n = Number($('#ptN').value);
-  if (!Number.isInteger(n) || n < 1 || n > max) return pointErr(`数は 1〜${max} で入れてください`);
-  const minus = !line && $('#pointDlg input[name="ptSign"]:checked').value === '-1';
+  if (!Number.isInteger(n) || n < 1 || n > FIX_MAX) return pointErr(`数は 1〜${FIX_MAX} で入れてください`);
+  const minus = $('#pointDlg input[name="ptSign"]:checked').value === '-1';
   if (minus && !m.total) return pointErr('いまの数が 0 なので、減らせません');
   pointing.n = minus ? -n : n;
-  pointing.note = line ? '' : $('#ptNote').value.trim();
+  pointing.note = $('#ptNote').value.trim();
   pointStep(2);
 }
 
@@ -213,23 +202,15 @@ function pointDone(row, text, warn = '') {
 }
 
 async function pointSend() {
-  const { kind, m, n, note, rid } = pointing;
-  const line = kind === 'line';
-  const gave = row => `${m.no} に ${n}ポイント入れました（いま ${stampCount(row.total)}）。お客様の画面は6秒ほどで変わります。`;
+  const { m, n, note, rid } = pointing;
   $('#ptBack').disabled = $('#ptOk').disabled = true;
   pointErr('');
   try {
-    const r = await staffPost(line ? { action: 'lineGive', no: m.no, n } : { action: 'memberFix', no: m.no, delta: n, note, rid });
-    if (line) return pointDone(r.row, gave(r.row));
+    const r = await staffPost({ action: 'memberFix', no: m.no, delta: n, note, rid });
     const want = Math.max(0, m.total + n);
     pointDone(r.row, `${m.no} の数を直しました（いま ${stampCount(r.row.total)}）。`,
       r.row.total === want ? '' : `★数が思っていたのと違います（${stampCount(want)}のはずが、${stampCount(r.row.total)}）。確かめて、必要なら直してください。`);
   } catch (e) {
-    const row = e.data?.row;
-    if (line && e.code === 'line_done' && row) {
-      if (!m.lineMovedAt && row.total === m.total + n) return pointDone(row, gave(row));
-      return pointDone(row, '', `${MSG.line_done}いまの数は ${stampCount(row.total)} です。`);
-    }
     // 届いたかどうか分からないときは、そのまま押し直さない（2回入ることがある）。読み直して、いまの数を見てもらう
     if (unsure(e)) {
       $('#pointDlg').close();
@@ -252,7 +233,7 @@ function openTab(name) {
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
   $('#app').hidden = name !== 'app';
   $('#paper').hidden = name !== 'paper';
-  if (name === 'paper') paintLeft();
+  if (name === 'paper') paintLeft(); else $('#q').focus();
 }
 function paperSay(ok = '', ng = '') {
   $('#pDone').textContent = ok; $('#pDone').hidden = !ok;
@@ -337,7 +318,7 @@ $('#find').addEventListener('submit', e => {
 $('#list').addEventListener('click', e => {
   const b = e.target.closest('[data-point]');
   const m = b && members.find(x => x.no === b.dataset.no);
-  if (m) { say(); openPoint(b.dataset.point, m); }
+  if (m) { say(); openPoint(m); }
 });
 $('#ptBack').addEventListener('click', () => { if ($('#ptCheck').hidden) $('#pointDlg').close(); else pointStep(1); });
 $('#ptForm').addEventListener('submit', e => {

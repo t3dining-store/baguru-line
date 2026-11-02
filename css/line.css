@@ -67,7 +67,6 @@ main { max-width: 620px; margin: 0 auto; padding: 14px 14px 0; }
 .l-tag.warn { background: var(--red-soft); color: var(--red); }
 .l-btns { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 8px; }
 .l-btns button { height: 44px; padding: 0 14px; border-radius: 10px; font-weight: 700; }
-.l-btns .b-line { flex: 1; background: var(--ember); color: #fff; }
 .l-btns .b-fix { margin-left: auto; background: var(--brass-soft); color: var(--coal); }
 
 /* 数を入れる窓 */
