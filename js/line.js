@@ -37,6 +37,28 @@ if (FROM_OWNER) {
   $('#homeBtn').onclick = goOwner;
 }
 
+/* ---- Android でホーム画面に入れる（2026-11-02 ko-dai さんの指示：Chrome のマークが付かないように。公式アプリの js/install.js と同じ考え方） ----
+ *  サービスワーカー（sw.js。何も保存しない）があると、Chrome が「インストールしますか」を出せる。
+ *  メニューから「ショートカットを作成」で入れると Chrome のマークが付くので、Android ではこのボタンから入れてもらう。
+ *  入れたあと（ホーム画面から開いたとき）と、バグる Owner・バグる Staff の中から開いたときは出さない */
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+let installPrompt = null;
+addEventListener('beforeinstallprompt', e => {
+  if (!/Android/.test(navigator.userAgent) || FROM_OWNER) return;   // パソコンでは Chrome のふだんの案内のまま
+  e.preventDefault();
+  installPrompt = e;
+  $('#install').hidden = false;
+});
+addEventListener('appinstalled', () => { installPrompt = null; $('#install').hidden = true; });
+$('#installBtn').addEventListener('click', async () => {
+  if (!installPrompt) return;
+  const p = installPrompt;
+  installPrompt = null;   // 1回しか出せない。やめたときは、次に開いたときにまた出る
+  $('#install').hidden = true;
+  p.prompt();
+  await p.userChoice.catch(() => {});
+});
+
 /* ---- 受け口（予約ボードの公開先の config.js・api.js を読む。公式アプリ・マネージと同じ） ---- */
 const LOADED = {};
 const loadJs = (src, integrity = '') => (LOADED[src] ??= new Promise((ok, ng) => {
