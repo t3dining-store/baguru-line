@@ -238,7 +238,7 @@ function openTab(name) {
   $('#screen').hidden = name !== 'screen';
   if (name === 'paper') paintLeft();
   else if (name === 'app') $('#q').focus();
-  else { screenSay(); loadJs(QR_LIB.src, QR_LIB.integrity).catch(() => {}); }   // QR の部品は先に読んでおく
+  else { screenSay(); screenPrepare(); }   // 押したらすぐ出せるように、先に用意しておく
 }
 function paperSay(ok = '', ng = '') {
   $('#pDone').textContent = ok; $('#pDone').hidden = !ok;
@@ -313,38 +313,73 @@ async function voidTickets() {
 /* ---- 画面に出すQR（2026-11-02 ko-dai さんの指示「アプリ内でもQRコードを表示させて引き継ぎができるように」）----
  *  ・紙と同じ券（lineTickets）を1組だけ発行して、この端末に覚えて使い回す。受け口は紙と同じで、変えていない
  *  ・★コードは紙の PDF と同じく、この端末の中だけ（localStorage の baguru.line.screen）。「全部無効にする」「合言葉を消す」で消す
- *  ・ほかの端末で「全部無効にする」を押すと、この端末のQRは読めなくなる。どれかの数の使える枚数が0なら、覚えた組は無効なので作り直す。
+ *  ・★押したらすぐ出す（2026-11-02 ko-dai さんの指示「用意していますの時間が長い」）。15枚のQRの絵（マスの形）は、発行したときに作って
+ *    コードと一緒に覚えておく。タブを開いたときに用意しておき、押したときは受け口の返事を待たない（受け口は1回 1〜3秒かかる）
+ *  ・ほかの端末で「全部無効にする」を押すと、この端末のQRは読めなくなる。どれかの数の使える枚数が0なら、覚えた組は無効なので作り直す
+ *    （タブを開いたときと、QR を出したあとに見る。出したあとに分かったら、出しているQRも新しいものに替える）。
  *    見分けられないとき（あとで別の券を発行したとき）は、お客様に「このQRは使えません」と出るので「作り直す」を押す
  *  ・出しているあいだ lineTicketInfo の読まれた回数（used）を見て、増えたら「読み取られました」にする（紙の券が読まれても増えるので、目安）
  *  ・置いたままにしないように、3分で閉じる。出しているあいだは画面を暗くしない */
 const SCREEN_KEY = 'baguru.line.screen';
 const SHOW_MS = 180000;    // QR を出しておく長さ
 const WATCH_MS = 4000;     // 読まれたかを見る間
-let screenSet = screenLoad();   // { at, tickets: [{ id, n, code }] }
+let screenSet = screenLoad();   // { at, tickets: [{ id, n, code, size, d }] }。size・d は QR の絵（qrPath）
 let screenRid = '';             // 作っている組の rid。返事が届かなくて押し直しても、同じ rid なら2組作られない
+let screenMaking = null;        // 発行している途中（タブを開いたときと押したときが重なっても、1回だけ）
 let showing = null;             // 出している QR { n, used, until }
 let wakeLock = null;
 
+/** 覚えた組を読む。絵の形がおかしければ捨てて、あとで作り直す（コードは使う） */
 function screenLoad() {
   try {
     const s = JSON.parse(localStorage.getItem(SCREEN_KEY) || 'null');
     const ok = s?.tickets?.length === LINE_MAX && s.tickets.every(t => /^[2-9A-HJKMNP-Z]{16}$/.test(t.code));
-    return ok ? s : null;
+    if (!ok) return null;
+    s.tickets.forEach(t => { if (!(Number.isInteger(t.size) && /^[Mhvz\d -]+$/.test(t.d || ''))) delete t.d; });
+    return s;
   } catch (e) { return null; }
+}
+function screenKeep() {
+  try { localStorage.setItem(SCREEN_KEY, JSON.stringify(screenSet)); } catch (e) {}   // 覚えられなくても、開いているあいだは使える
 }
 function screenForget() {
   screenSet = null;
   try { localStorage.removeItem(SCREEN_KEY); } catch (e) {}
 }
-/** 画面用の1組。無ければ発行して、この端末に覚える */
-async function screenTickets() {
-  if (screenSet) return screenSet;
-  screenRid ||= fixRid();
-  const r = await staffPost({ action: 'lineTickets', sets: 1, rid: screenRid });
-  screenRid = '';
-  screenSet = { at: new Date().toISOString(), tickets: r.tickets };
-  try { localStorage.setItem(SCREEN_KEY, JSON.stringify(screenSet)); } catch (e) {}   // 覚えられなくても、開いているあいだは使える
-  return screenSet;
+/** 絵が無い券（前の版で覚えた組）に、絵を作って覚える */
+async function screenDraw() {
+  if (!screenSet || screenSet.tickets.every(t => t.d)) return;
+  await loadJs(QR_LIB.src, QR_LIB.integrity);
+  if (!screenSet) return;
+  screenSet.tickets.forEach(t => { if (!t.d) Object.assign(t, qrPath(`BAGURULINE:${t.code}`)); });
+  screenKeep();
+}
+/** 画面用の1組。無ければ発行して、絵も作って、この端末に覚える */
+function screenTickets() {
+  if (screenSet) return screenDraw().then(() => screenSet);
+  return screenMaking ??= (async () => {
+    try {
+      screenRid ||= fixRid();
+      const [r] = await Promise.all([staffPost({ action: 'lineTickets', sets: 1, rid: screenRid }), loadJs(QR_LIB.src, QR_LIB.integrity)]);
+      screenRid = '';
+      screenSet = { at: new Date().toISOString(), tickets: r.tickets.map(t => ({ ...t, ...qrPath(`BAGURULINE:${t.code}`) })) };
+      screenKeep();
+      return screenSet;
+    } finally {
+      screenMaking = null;
+    }
+  })();
+}
+/** タブを開いたときに、押したらすぐ出せるようにしておく。ほかの端末で全部無効にされていたら、作り直しておく */
+async function screenPrepare() {
+  try {
+    await screenDraw();
+    const had = screenSet, info = await infoNow();
+    if (info && had && had === screenSet && !allLeft(info)) screenForget();
+    await screenTickets();
+  } catch (e) {
+    if (e?.code === 'bad_pin' || e?.code === 'locked') fail(e);   // ほかの失敗は、押したときに知らせる
+  }
 }
 
 function screenSay(ok = '', ng = '') {
@@ -353,16 +388,19 @@ function screenSay(ok = '', ng = '') {
 }
 const qrState = (text, cls = '') => { $('#qrState').textContent = text; $('#qrState').className = `qr-state ${cls}`; };
 
-/** QR を絵（SVG）にする。まわりに白を4マス残す。中身の形は紙と同じ（js/line-pdf.js） */
-function qrSvg(text) {
+/** QR のマスの形を作る（SVG の path）。まわりに白を4マス残す。中身の形は紙と同じ（js/line-pdf.js） */
+function qrPath(text) {
   const q = qrcode(0, 'M');
   q.addData(text);
   q.make();
-  const count = q.getModuleCount(), pad = 4, size = count + pad * 2;
+  const count = q.getModuleCount(), pad = 4;
   let d = '';
   for (let r = 0; r < count; r++) for (let c = 0; c < count; c++) if (q.isDark(r, c)) d += `M${c + pad} ${r + pad}h1v1h-1z`;
-  return `<svg viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges" role="img" aria-label="LINE 引き継ぎのQR"><rect width="${size}" height="${size}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  return { size: count + pad * 2, d };
 }
+const qrSvg = ({ size, d }) => `<svg viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges" role="img" aria-label="LINE 引き継ぎのQR"><rect width="${size}" height="${size}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+/** 用意できている券（絵まであるもの）。無ければ空 */
+const readyTicket = n => screenSet?.tickets.find(t => t.n === n && t.d);
 
 async function wake(on) {
   if (!on) { wakeLock?.release().catch(() => {}); wakeLock = null; return; }
@@ -376,23 +414,38 @@ async function wake(on) {
 const infoNow = () => staffPost({ action: 'lineTicketInfo' }).catch(e => { if (e?.code === 'bad_pin' || e?.code === 'locked') throw e; return null; });
 const allLeft = info => Array.from({ length: LINE_MAX }, (_, i) => info.left?.[i + 1] || 0).every(k => k > 0);
 
+/** 出している窓に、その数の QR を入れる。用意できていれば待たない */
+async function putQr(me) {
+  const t = readyTicket(me.n) || (await screenTickets()).tickets.find(x => x.n === me.n);
+  if (showing !== me) return;
+  $('#qrBox').innerHTML = qrSvg(t);
+  qrState('お客様のアプリで読んでもらってください');
+}
+
 async function showQr(n) {
   screenSay();
   const me = showing = { n, used: undefined, until: 0 };
+  const had = screenSet;
+  const seen = infoNow();   // 読まれた回数は、QR を出すのと同時に数え始める（返事は待たない）
+  seen.catch(() => {});
   $('#qrN').textContent = n;
-  $('#qrBox').innerHTML = '<p class="qr-wait">QRを用意しています…</p>';
-  qrState('');
+  const t = readyTicket(n);
+  $('#qrBox').innerHTML = t ? qrSvg(t) : '<p class="qr-wait">QRを用意しています…</p>';   // ふだんは、ここでもう出ている
+  qrState(t ? 'お客様のアプリで読んでもらってください' : '');
   $('#qrDlg').showModal();
   try {
-    const [info] = await Promise.all([infoNow(), loadJs(QR_LIB.src, QR_LIB.integrity)]);   // 読まれた回数は、QR を出す前に数えておく
-    if (info && screenSet && !allLeft(info)) screenForget();   // ほかの端末で全部無効にされた
-    const t = (await screenTickets()).tickets.find(x => x.n === n);
+    if (!t) await putQr(me);
     if (showing !== me) return;
-    $('#qrBox').innerHTML = qrSvg(`BAGURULINE:${t.code}`);
-    qrState('お客様のアプリで読んでもらってください');
-    me.used = info?.used;
     me.until = Date.now() + SHOW_MS;
     wake(true);
+    const info = await seen;
+    if (showing !== me) return;
+    if (info && had && had === screenSet && !allLeft(info)) screenForget();   // ほかの端末で全部無効にされていた
+    if (had && screenSet !== had) {   // 出しているのは無効になった組のQR。新しい組のものに替える
+      await putQr(me);
+      if (showing !== me) return;
+    }
+    me.used = info?.used;
     watchRead(me);
   } catch (e) {
     if (showing !== me) return;
