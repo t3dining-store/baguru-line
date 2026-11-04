@@ -16,8 +16,8 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /* ---- バグる Owner・バグる Staff から開いたときだけ「🏠 ホーム」（Order受付と同じ印。わけは バグるOrder受付/js/store.js の頭） ---- */
-const OWNER_URL = 'https://t3dining.github.io/baguru-owner/';
-const STAFF_URL = 'https://t3dining.github.io/baguru-staff/';
+const OWNER_URL = 'https://t3dining-store.github.io/baguru-owner/';   // 2026-11-05 にお店用の場所へ引っ越した（../../お店用アプリの引っ越し.md）
+const STAFF_URL = 'https://t3dining-store.github.io/baguru-staff/';
 const FROM_OWNER = (() => {
   const mark = /[?&]from=owner\b/.test(location.search);
   try {
