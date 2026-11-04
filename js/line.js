@@ -81,6 +81,7 @@ const MSG = {
   not_ready: '受け口の場所を読めませんでした。少し時間を置いてから、もう一度お試しください。',
   offline: 'つながりませんでした。電波の良い所で、もう一度お試しください。',
   no_answer: 'つながりませんでした。時間を置いて、もう一度お試しください。',
+  forgot: '作っているあいだに画面のQRを消したので、作るのをやめました。もう一度お試しください。',
 };
 const message = e => MSG[e?.code] || MSG.no_answer;
 const unsure = e => e?.code === 'no_answer' || e?.code === 'offline';   // 受け口に届いたかどうか分からない
@@ -121,9 +122,9 @@ function pointErr(text) { $('#ptErr').textContent = text; $('#ptErr').hidden = !
 /** 合言葉が違う・しばらく使えないと言われたら、合言葉の画面に戻す。ほかは、わけを出す */
 function fail(e, showText) {
   if (e?.code !== 'bad_pin' && e?.code !== 'locked') return showText(message(e));
-  if (e.code === 'bad_pin') pinSet('');
+  if (e.code === 'bad_pin') { pinSet(''); screenForget(); }   // 合言葉が替わった端末には、画面のQRのコードも残さない
   if ($('#pointDlg').open) $('#pointDlg').close();
-  if ($('#qrDlg').open) $('#qrDlg').close();
+  closeQr();
   show(false, message(e));
 }
 
@@ -218,29 +219,30 @@ function pointRead() {
   pointStep(2);
 }
 
-/** うまくいった（窓を閉じて、探した結果に知らせる） */
-function pointDone(row, text, warn = '') {
-  $('#pointDlg').close();
+/** うまくいった（窓を閉じて、探した結果に知らせる）。送っているあいだに窓を閉じて、ほかの会員を開いていたら、その窓は閉じない */
+function pointDone(me, row, text, warn = '') {
+  if (pointing === me) $('#pointDlg').close();
   putMember(row);
   say(text, warn);
 }
 
 async function pointSend() {
-  const { m, n, note, rid } = pointing;
+  const me = pointing, { m, n, note, rid } = me;
   $('#ptBack').disabled = $('#ptOk').disabled = true;
   pointErr('');
   try {
     const r = await staffPost({ action: 'memberFix', no: m.no, delta: n, note, rid });
     const want = Math.max(0, m.total + n);
-    pointDone(r.row, `${m.no} の数を直しました（いま ${stampCount(r.row.total)}）。`,
+    pointDone(me, r.row, `${m.no} の数を直しました（いま ${stampCount(r.row.total)}）。`,
       r.row.total === want ? '' : `★数が思っていたのと違います（${stampCount(want)}のはずが、${stampCount(r.row.total)}）。確かめて、必要なら直してください。`);
   } catch (e) {
+    const mine = pointing === me;   // ほかの会員の窓を開いていたら、その窓には書かない
     // 届いたかどうか分からないときは、そのまま押し直さない（2回入ることがある）。読み直して、いまの数を見てもらう
     if (unsure(e)) {
-      $('#pointDlg').close();
-      await findMembers(m.no);
-      return say('', '受け口から返事がありませんでした。入っていることがあるので、いまの数を確かめてから、もう一度入れてください。');
+      if (mine) { $('#pointDlg').close(); await findMembers(m.no); }
+      return say('', `${m.no} は、受け口から返事がありませんでした。入っていることがあるので、いまの数を確かめてから、もう一度入れてください。`);
     }
+    if (!mine) return fail(e, text => say('', `${m.no}：${text}`));
     $('#ptBack').disabled = $('#ptOk').disabled = false;
     fail(e, pointErr);
   }
@@ -252,6 +254,8 @@ const QR_LIB = { src: 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1
 let issuing = null;           // 発行している組 { sets, rid }。返事が届かなくて押し直しても、同じ rid なら2組発行されない
 let issued = [];              // 発行した券。PDF を作るあいだだけ、この画面の中に持つ
 let unsaved = false;          // 発行して、まだ PDF を保存していない
+let paperBusy = false;        // 発行と「全部無効にする」を、同時に進めない（無効にしたすぐあとに、前に押した発行が届いて使える券ができないように）
+function paperLock(on) { paperBusy = on; $('#issueBtn').disabled = $('#voidBtn').disabled = on; }
 
 function openTab(name) {
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
@@ -299,9 +303,10 @@ async function saveTickets() {
 
 async function issueTickets() {
   const sets = Number($('#sets').value);
+  if (paperBusy) return;
   if (unsaved && !confirm('前に発行したQRの PDF が、まだ保存されていません。新しく発行すると、前のQRは保存できなくなります。続けますか？')) return;
   if (issuing?.sets !== sets) issuing = { sets, rid: fixRid() };
-  $('#issueBtn').disabled = true;
+  paperLock(true);
   paperSay();
   try {
     await loadJs(QR_LIB.src, QR_LIB.integrity);
@@ -315,12 +320,13 @@ async function issueTickets() {
   } catch (e) {
     fail(e, text => paperSay('', text));
   } finally {
-    $('#issueBtn').disabled = false;
+    paperLock(false);
   }
 }
 
 async function voidTickets() {
-  if (!confirm('いま使えるQRを全部無効にします。印刷した紙も、画面のQRも、全部読めなくなります。よろしいですか？')) return;
+  if (paperBusy || !confirm('いま使えるQRを全部無効にします。印刷した紙も、画面のQRも、全部読めなくなります。よろしいですか？')) return;
+  paperLock(true);
   paperSay();
   try {
     const r = await staffPost({ action: 'lineTicketVoid' });
@@ -329,6 +335,8 @@ async function voidTickets() {
     paperSay(`${r.voided}枚を無効にしました。`);
   } catch (e) {
     fail(e, text => paperSay('', text));
+  } finally {
+    paperLock(false);
   }
 }
 
@@ -341,14 +349,16 @@ async function voidTickets() {
  *    （タブを開いたときと、QR を出したあとに見る。出したあとに分かったら、出しているQRも新しいものに替える）。
  *    見分けられないとき（あとで別の券を発行したとき）は、お客様に「このQRは使えません」と出るので「作り直す」を押す
  *  ・出しているあいだ lineTicketInfo の読まれた回数（used）を見て、増えたら「読み取られました」にする（紙の券が読まれても増えるので、目安）
- *  ・置いたままにしないように、3分で閉じる。出しているあいだは画面を暗くしない */
+ *  ・置いたままにしないように、3分で閉じる（受け口の返事を待っていても閉じる）。出しているあいだは画面を暗くしない
+ *  ・★消したあとに、消す前に頼んだ発行の答えが届いても覚えない（screenGen）。合言葉が無い・違うと分かった端末にも残さない */
 const SCREEN_KEY = 'baguru.line.screen';
 const SHOW_MS = 180000;    // QR を出しておく長さ
 const WATCH_MS = 4000;     // 読まれたかを見る間
 let screenSet = screenLoad();   // { at, tickets: [{ id, n, code, size, d }] }。size・d は QR の絵（qrPath）
 let screenRid = '';             // 作っている組の rid。返事が届かなくて押し直しても、同じ rid なら2組作られない
 let screenMaking = null;        // 発行している途中（タブを開いたときと押したときが重なっても、1回だけ）
-let showing = null;             // 出している QR { n, used, until }
+let screenGen = 0;              // 消すたびに増やす。消す前に頼んだ発行の答えは捨てる
+let showing = null;             // 出している QR { n, used }
 let wakeLock = null;
 
 /** 覚えた組を読む。絵の形がおかしければ捨てて、あとで作り直す（コードは使う） */
@@ -365,7 +375,9 @@ function screenKeep() {
   try { localStorage.setItem(SCREEN_KEY, JSON.stringify(screenSet)); } catch (e) {}   // 覚えられなくても、開いているあいだは使える
 }
 function screenForget() {
-  screenSet = null;
+  screenGen++;
+  screenSet = screenMaking = null;
+  screenRid = '';
   try { localStorage.removeItem(SCREEN_KEY); } catch (e) {}
 }
 /** 絵が無い券（前の版で覚えた組）に、絵を作って覚える */
@@ -379,16 +391,18 @@ async function screenDraw() {
 /** 画面用の1組。無ければ発行して、絵も作って、この端末に覚える */
 function screenTickets() {
   if (screenSet) return screenDraw().then(() => screenSet);
+  const gen = screenGen;
   return screenMaking ??= (async () => {
     try {
       screenRid ||= fixRid();
       const [r] = await Promise.all([staffPost({ action: 'lineTickets', sets: 1, rid: screenRid }), loadJs(QR_LIB.src, QR_LIB.integrity)]);
+      if (gen !== screenGen) throw Object.assign(new Error('forgot'), { code: 'forgot' });   // 待っているあいだに消した（合言葉を消した・全部無効にした）
       screenRid = '';
       screenSet = { at: new Date().toISOString(), tickets: r.tickets.map(t => ({ ...t, ...qrPath(`BAGURULINE:${t.code}`) })) };
       screenKeep();
       return screenSet;
     } finally {
-      screenMaking = null;
+      if (gen === screenGen) screenMaking = null;   // 消したあとに始めた発行は、消さない
     }
   })();
 }
@@ -446,8 +460,13 @@ async function putQr(me) {
 
 async function showQr(n) {
   screenSay();
-  const me = showing = { n, used: undefined, until: 0 };
+  const me = showing = { n, used: undefined };
   const had = screenSet;
+  setTimeout(() => {   // 受け口の返事を待っていても、3分で閉じる
+    if (showing !== me) return;
+    closeQr();
+    screenSay('3分たったので、QRを閉じました。もう一度出すときは、数を押してください。');
+  }, SHOW_MS);
   const seen = infoNow();   // 読まれた回数は、QR を出すのと同時に数え始める（返事は待たない）
   seen.catch(() => {});
   $('#qrN').textContent = n;
@@ -458,7 +477,6 @@ async function showQr(n) {
   try {
     if (!t) await putQr(me);
     if (showing !== me) return;
-    me.until = Date.now() + SHOW_MS;
     wake(true);
     const info = await seen;
     if (showing !== me) return;
@@ -471,20 +489,16 @@ async function showQr(n) {
     watchRead(me);
   } catch (e) {
     if (showing !== me) return;
-    $('#qrDlg').close();
+    closeQr();
     fail(e, text => screenSay('', text));
   }
 }
 
-/** 出しているあいだ、読まれた回数を見る。増えたら「読み取られました」。3分たったら閉じる */
+/** 出しているあいだ、読まれた回数を見る。増えたら「読まれました」 */
 async function watchRead(me) {
   while (showing === me) {
     await new Promise(ok => setTimeout(ok, WATCH_MS));
     if (showing !== me) return;
-    if (Date.now() > me.until) {
-      $('#qrDlg').close();
-      return screenSay('3分たったので、QRを閉じました。もう一度出すときは、数を押してください。');
-    }
     try {
       const info = await infoNow();
       if (showing !== me || !info) continue;
@@ -492,17 +506,26 @@ async function watchRead(me) {
       else if (info.used > me.used) return qrRead(me);
     } catch (e) {
       if (showing !== me) return;
-      $('#qrDlg').close();
+      closeQr();
       return fail(e);
     }
   }
+}
+
+/** QR の窓を閉じて、QR を画面から消す。★close の知らせを待たない（画面が裏にあると、表に出るまで届かない） */
+function closeQr() {
+  showing = null;
+  wake(false);
+  $('#qrBox').innerHTML = '';
+  if ($('#qrDlg').open) $('#qrDlg').close();
 }
 
 function qrRead(me) {
   showing = null;
   wake(false);
   $('#qrBox').innerHTML = '<p class="qr-ok" aria-hidden="true">✓</p>';
-  qrState(`読み取られました。お客様のアプリに「${me.n}ポイント引き継ぎました」と出ているか、見せてもらってください。`, 'ok');
+  // ★読まれた回数は全部の券の合計なので、紙の券が読まれても増える。お客様のアプリで、引き継げたかを必ず見てもらう
+  qrState(`QRが読まれました。お客様のアプリに「${me.n}ポイント引き継ぎました」と出ているか、必ず見せてもらってください。`, 'ok');
 }
 
 async function remakeScreen() {
@@ -525,8 +548,8 @@ addEventListener('beforeunload', e => { if (unsaved) { e.preventDefault(); e.ret
 $('#voidBtn').addEventListener('click', voidTickets);
 $('#nums').innerHTML = Array.from({ length: LINE_MAX }, (_, i) => `<button type="button" data-n="${i + 1}"><b>${i + 1}</b><small>ポイント</small></button>`).join('');
 $('#nums').addEventListener('click', e => { const b = e.target.closest('[data-n]'); if (b) showQr(Number(b.dataset.n)); });
-$('#qrClose').addEventListener('click', () => $('#qrDlg').close());
-$('#qrDlg').addEventListener('close', () => { showing = null; wake(false); $('#qrBox').innerHTML = ''; });   // 閉じたら QR を画面から消す
+$('#qrClose').addEventListener('click', closeQr);
+$('#qrDlg').addEventListener('close', closeQr);   // Esc で閉じたとき
 $('#remake').addEventListener('click', remakeScreen);
 $('#find').addEventListener('submit', e => {
   e.preventDefault();
@@ -543,14 +566,26 @@ $('#ptForm').addEventListener('submit', e => {
   e.preventDefault();
   if ($('#ptCheck').hidden) pointRead(); else if (!$('#ptOk').disabled) pointSend();
 });
-$('#forget').addEventListener('click', () => {
-  if (!confirm('この端末の合言葉を消します。同じブラウザの予約ボード・Order受付・マネージでも、また入れることになります。よろしいですか？')) return;
-  pinSet('');
-  screenForget();   // 画面のQRのコードも、この端末から消す
+/** 合言葉を消したとき。画面のQRのコードも、この端末から消す */
+function signOut() {
+  screenForget();
   members = [];
   $('#list').innerHTML = '';
   say();
+  if ($('#pointDlg').open) $('#pointDlg').close();
+  closeQr();
   show(false);
+}
+$('#forget').addEventListener('click', () => {
+  if (!confirm('この端末の合言葉を消します。同じブラウザの予約ボード・Order受付・マネージでも、また入れることになります。よろしいですか？')) return;
+  pinSet('');
+  signOut();
+});
+/* ほかのタブ・同じブラウザのほかのアプリ（予約ボードなど）で、合言葉や画面のQRを変えたとき */
+addEventListener('storage', e => {
+  if (e.key !== null && e.key !== PIN_KEY && e.key !== SCREEN_KEY) return;
+  if (!pinGet()) return signOut();
+  if (e.key !== PIN_KEY) { screenGen++; screenMaking = null; screenRid = ''; screenSet = screenLoad(); }   // ほかのタブで作り直した・消した組に合わせる
 });
 $('#login').addEventListener('submit', async e => {
   e.preventDefault();
@@ -570,7 +605,7 @@ $('#login').addEventListener('submit', async e => {
 
 /* ---- はじめ ---- */
 (async () => {
-  if (!pinGet()) return show(false);
+  if (!pinGet()) { screenForget(); return show(false); }   // ほかのアプリで合言葉を消していたら、画面のQRのコードも残さない
   try {
     await staffPost({ action: 'ping' });
     show(true);
