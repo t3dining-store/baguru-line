@@ -345,10 +345,10 @@ async function voidTickets() {
  *  ・★コードは紙の PDF と同じく、この端末の中だけ（localStorage の baguru.line.screen）。「全部無効にする」「合言葉を消す」で消す
  *  ・★押したらすぐ出す（2026-11-02 ko-dai さんの指示「用意していますの時間が長い」）。15枚のQRの絵（マスの形）は、発行したときに作って
  *    コードと一緒に覚えておく。タブを開いたときに用意しておき、押したときは受け口の返事を待たない（受け口は1回 1〜3秒かかる）
- *  ・ほかの端末で「全部無効にする」を押すと、この端末のQRは読めなくなる。どれかの数の使える枚数が0なら、覚えた組は無効なので作り直す
- *    （タブを開いたときと、QR を出したあとに見る。出したあとに分かったら、出しているQRも新しいものに替える）。
- *    見分けられないとき（あとで別の券を発行したとき）は、お客様に「このQRは使えません」と出るので「作り直す」を押す
- *  ・出しているあいだ lineTicketInfo の読まれた回数（used）を見て、増えたら「読み取られました」にする（紙の券が読まれても増えるので、目安）
+ *  ・ほかの端末で「全部無効にする」を押すと、この端末のQRは読めなくなる。lineTicketInfo に覚えた券の id を送って、無効かどうかを見て作り直す
+ *    （タブを開いたときと、QR を出しているあいだ。出しているあいだに分かったら、出しているQRも新しいものに替える。受け口の版 2026-11-05c から）
+ *  ・出しているあいだ、その券の読まれた回数（reads）を見て、増えたら「読み取られました」にする（紙の券やほかの端末のQRが読まれても変わらない）
+ *  ・券ごとの答えが無い古い受け口では、前のやり方（数ごとの使える枚数・全部の券の読まれた回数）で見る
  *  ・置いたままにしないように、3分で閉じる（受け口の返事を待っていても閉じる）。出しているあいだは画面を暗くしない
  *  ・★消したあとに、消す前に頼んだ発行の答えが届いても覚えない（screenGen）。合言葉が無い・違うと分かった端末にも残さない */
 const SCREEN_KEY = 'baguru.line.screen';
@@ -358,14 +358,14 @@ let screenSet = screenLoad();   // { at, tickets: [{ id, n, code, size, d }] }�
 let screenRid = '';             // 作っている組の rid。返事が届かなくて押し直しても、同じ rid なら2組作られない
 let screenMaking = null;        // 発行している途中（タブを開いたときと押したときが重なっても、1回だけ）
 let screenGen = 0;              // 消すたびに増やす。消す前に頼んだ発行の答えは捨てる
-let showing = null;             // 出している QR { n, used }
+let showing = null;             // 出している QR { n, ticket: 出している券, reads: 出したときの読まれた回数 }
 let wakeLock = null;
 
 /** 覚えた組を読む。絵の形がおかしければ捨てて、あとで作り直す（コードは使う） */
 function screenLoad() {
   try {
     const s = JSON.parse(localStorage.getItem(SCREEN_KEY) || 'null');
-    const ok = s?.tickets?.length === LINE_MAX && s.tickets.every(t => /^[2-9A-HJKMNP-Z]{16}$/.test(t.code));
+    const ok = s?.tickets?.length === LINE_MAX && s.tickets.every(t => /^[2-9A-HJKMNP-Z]{16}$/.test(t.code) && /^t[A-Za-z0-9]{1,30}$/.test(t.id));
     if (!ok) return null;
     s.tickets.forEach(t => { if (!(Number.isInteger(t.size) && /^[Mhvz\d -]+$/.test(t.d || ''))) delete t.d; });
     return s;
@@ -410,8 +410,8 @@ function screenTickets() {
 async function screenPrepare() {
   try {
     await screenDraw();
-    const had = screenSet, info = await infoNow();
-    if (info && had && had === screenSet && !allLeft(info)) screenForget();
+    const had = screenSet, info = await infoNow(ticketIds(had));
+    if (info && had && had === screenSet && setGone(info)) screenForget();
     await screenTickets();
   } catch (e) {
     if (e?.code === 'bad_pin' || e?.code === 'locked') fail(e);   // ほかの失敗は、押したときに知らせる
@@ -446,31 +446,39 @@ async function wake(on) {
   } catch (e) {}
 }
 
-/** 合言葉が違うときは、ほかの画面と同じく合言葉の画面へ。ほかの失敗は無かったことにする（見るだけなので） */
-const infoNow = () => staffPost({ action: 'lineTicketInfo' }).catch(e => { if (e?.code === 'bad_pin' || e?.code === 'locked') throw e; return null; });
+/** 合言葉が違うときは、ほかの画面と同じく合言葉の画面へ。ほかの失敗は無かったことにする（見るだけなので）。
+ *  ids（券の id、15個まで）を送ると、その券ごとに { id, found, n, reads, voided } が tickets に返る（受け口の版 2026-11-05c から） */
+const infoNow = (ids = []) => staffPost({ action: 'lineTicketInfo', ...(ids.length && { ids }) })
+  .catch(e => { if (e?.code === 'bad_pin' || e?.code === 'locked') throw e; return null; });
+const ticketIds = set => (set ? set.tickets.map(t => t.id) : []);
 const allLeft = info => Array.from({ length: LINE_MAX }, (_, i) => info.left?.[i + 1] || 0).every(k => k > 0);
+/** 覚えた組が、もう使えない（ほかの端末で全部無効にした）。券ごとの答えが無い古い受け口では、どれかの数の使える枚数が0なら */
+const setGone = info => (info.tickets ? info.tickets.some(t => !t.found || t.voided) : !allLeft(info));
+/** 出している券の読まれた回数。券ごとの答えが無い古い受け口では、全部の券の合計 */
+const readsOf = (info, t) => (info.tickets ? info.tickets.find(x => x.id === t.id)?.reads : info.used);
 
 /** 出している窓に、その数の QR を入れる。用意できていれば待たない */
 async function putQr(me) {
   const t = readyTicket(me.n) || (await screenTickets()).tickets.find(x => x.n === me.n);
   if (showing !== me) return;
+  me.ticket = t;
   $('#qrBox').innerHTML = qrSvg(t);
   qrState('お客様のアプリで読んでもらってください');
 }
 
 async function showQr(n) {
   screenSay();
-  const me = showing = { n, used: undefined };
+  const t = readyTicket(n);
+  const me = showing = { n, ticket: t, reads: undefined };
   const had = screenSet;
   setTimeout(() => {   // 受け口の返事を待っていても、3分で閉じる
     if (showing !== me) return;
     closeQr();
     screenSay('3分たったので、QRを閉じました。もう一度出すときは、数を押してください。');
   }, SHOW_MS);
-  const seen = infoNow();   // 読まれた回数は、QR を出すのと同時に数え始める（返事は待たない）
+  const seen = infoNow(ticketIds(had));   // 組がまだ使えるかと読まれた回数を、QR を出すのと同時に見る（返事は待たない）
   seen.catch(() => {});
   $('#qrN').textContent = n;
-  const t = readyTicket(n);
   $('#qrBox').innerHTML = t ? qrSvg(t) : '<p class="qr-wait">QRを用意しています…</p>';   // ふだんは、ここでもう出ている
   qrState(t ? 'お客様のアプリで読んでもらってください' : '');
   $('#qrDlg').showModal();
@@ -480,12 +488,11 @@ async function showQr(n) {
     wake(true);
     const info = await seen;
     if (showing !== me) return;
-    if (info && had && had === screenSet && !allLeft(info)) screenForget();   // ほかの端末で全部無効にされていた
+    if (info && had && had === screenSet && setGone(info)) screenForget();   // ほかの端末で全部無効にされていた
     if (had && screenSet !== had) {   // 出しているのは無効になった組のQR。新しい組のものに替える
       await putQr(me);
       if (showing !== me) return;
-    }
-    me.used = info?.used;
+    } else if (info && had) me.reads = readsOf(info, me.ticket);   // ここから増えたら、読まれた
     watchRead(me);
   } catch (e) {
     if (showing !== me) return;
@@ -494,20 +501,27 @@ async function showQr(n) {
   }
 }
 
-/** 出しているあいだ、読まれた回数を見る。増えたら「読まれました」 */
+/** 出しているあいだ、その券の読まれた回数を見る。増えたら「読み取られました」。無効にされたら、新しい組のQRに替える */
 async function watchRead(me) {
   while (showing === me) {
     await new Promise(ok => setTimeout(ok, WATCH_MS));
     if (showing !== me) return;
     try {
-      const info = await infoNow();
+      const info = await infoNow([me.ticket.id]);
       if (showing !== me || !info) continue;
-      if (me.used === undefined) me.used = info.used;
-      else if (info.used > me.used) return qrRead(me);
+      if (info.tickets && setGone(info)) {   // 出しているあいだに、ほかの端末で全部無効にされた
+        if (screenSet?.tickets.includes(me.ticket)) screenForget();
+        await putQr(me);
+        me.reads = undefined;   // 新しい券は、次に見たときから数える
+        continue;
+      }
+      const reads = readsOf(info, me.ticket);
+      if (me.reads === undefined) me.reads = reads;
+      else if (reads > me.reads) return qrRead(me);
     } catch (e) {
       if (showing !== me) return;
       closeQr();
-      return fail(e);
+      return fail(e, text => screenSay('', text));
     }
   }
 }
@@ -524,7 +538,7 @@ function qrRead(me) {
   showing = null;
   wake(false);
   $('#qrBox').innerHTML = '<p class="qr-ok" aria-hidden="true">✓</p>';
-  // ★読まれた回数は全部の券の合計なので、紙の券が読まれても増える。お客様のアプリで、引き継げたかを必ず見てもらう
+  // ★その券の写真が出回っていれば、ほかの人が読んでも増える。お客様のアプリで、引き継げたかを必ず見てもらう
   qrState(`QRが読まれました。お客様のアプリに「${me.n}ポイント引き継ぎました」と出ているか、必ず見せてもらってください。`, 'ok');
 }
 
