@@ -37,6 +37,21 @@ if (FROM_OWNER) {
   $('#homeBtn').onclick = goOwner;
 }
 
+/* ---- QRの発行・全部無効にする・画面のQRの作り直し・数を直すは、バグる Owner の中から開いたときだけ（2026-11-06 ko-dai さんの指示）----
+ *  アプリ単体（ホーム画面のアイコン）と、バグる Staff（&hub=staff）から開いたときは出さない。index.html の data-owner を出し、data-staff を隠す。
+ *  ★画面で出さないだけ。合言葉は全員で同じなので、受け口では区別していない。分からないときは出さない側にする */
+const FROM_STAFF = (() => {
+  const staff = /[?&]hub=staff\b/.test(location.search);
+  try {
+    if (staff) sessionStorage.setItem('bg.fromHub', 'staff');
+    else if (/[?&]from=owner\b/.test(location.search)) sessionStorage.removeItem('bg.fromHub');   // Owner から開き直した
+    return sessionStorage.getItem('bg.fromHub') === 'staff' || /staff/i.test(sessionStorage.getItem('bg.owner') || '');
+  } catch (e) { return staff; }
+})();
+const OWNER_ONLY = FROM_OWNER && !FROM_STAFF;
+$$('[data-owner]').forEach(el => { el.hidden = !OWNER_ONLY; });
+$$('[data-staff]').forEach(el => { el.hidden = OWNER_ONLY; });
+
 /* ---- Android でホーム画面に入れる（2026-11-02 ko-dai さんの指示：Chrome のマークが付かないように。公式アプリの js/install.js と同じ考え方） ----
  *  サービスワーカー（sw.js。何も保存しない）があると、Chrome が「インストールしますか」を出せる。
  *  メニューから「ショートカットを作成」で入れると Chrome のマークが付くので、Android ではこのボタンから入れてもらう。
@@ -109,8 +124,10 @@ function show(signedIn, loginText = '') {
   $('#login').hidden = signedIn;
   $('#loginErr').textContent = loginText;
   $('#loginErr').hidden = !loginText;
+  $('#foot').hidden = !signedIn;
   if (!signedIn) { $('#app').hidden = $('#paper').hidden = $('#screen').hidden = true; return $('#pin').focus(); }
-  openTab(MEMBER_PLUS ? 'screen' : 'app');   // ふだんは画面のQRから（引き継ぎは画面か紙のQRだけ）
+  if (MEMBER_PLUS) openTab('screen');   // ふだんは画面のQRから（引き継ぎは画面か紙のQRだけ）
+  else if (OWNER_ONLY) openTab('app');
 }
 
 function say(ok = '', ng = '') {
@@ -176,7 +193,8 @@ function putMember(row) {
 }
 
 function openPoint(m) {
-  pointing = { m, n: 0, note: '', rid: fixRid() };
+  if (!OWNER_ONLY) return;
+  pointing ={ m, n: 0, note: '', rid: fixRid() };
   $('#ptTitle').textContent = '数を直す';
   $('#ptNo').textContent = m.no;
   $('#ptWho').textContent = `${m.name ? `${m.name} 様` : '名前の登録なし'}・いま ${stampCount(m.total)}`;
@@ -258,6 +276,7 @@ let paperBusy = false;        // 発行と「全部無効にする」を、同�
 function paperLock(on) { paperBusy = on; $('#issueBtn').disabled = $('#voidBtn').disabled = on; }
 
 function openTab(name) {
+  if (name === 'app' && !OWNER_ONLY) return;   // 数を直すは Owner の中だけ
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
   $('#app').hidden = name !== 'app';
   $('#paper').hidden = name !== 'paper';
@@ -303,7 +322,7 @@ async function saveTickets() {
 
 async function issueTickets() {
   const sets = Number($('#sets').value);
-  if (paperBusy) return;
+  if (paperBusy || !OWNER_ONLY) return;
   if (unsaved && !confirm('前に発行したQRの PDF が、まだ保存されていません。新しく発行すると、前のQRは保存できなくなります。続けますか？')) return;
   if (issuing?.sets !== sets) issuing = { sets, rid: fixRid() };
   paperLock(true);
@@ -325,7 +344,7 @@ async function issueTickets() {
 }
 
 async function voidTickets() {
-  if (paperBusy || !confirm('いま使えるQRを全部無効にします。印刷した紙も、画面のQRも、全部読めなくなります。よろしいですか？')) return;
+  if (paperBusy || !OWNER_ONLY || !confirm('いま使えるQRを全部無効にします。印刷した紙も、画面のQRも、全部読めなくなります。よろしいですか？')) return;
   paperLock(true);
   paperSay();
   try {
@@ -543,7 +562,7 @@ function qrRead(me) {
 }
 
 async function remakeScreen() {
-  if (!confirm('画面のQRを新しく作ります。この端末の前の画面のQRは、もう出せなくなります。よろしいですか？')) return;
+  if (!OWNER_ONLY || !confirm('画面のQRを新しく作ります。この端末の前の画面のQRは、もう出せなくなります。よろしいですか？')) return;
   screenForget();
   screenSay();
   try {

@@ -45,7 +45,7 @@
   <nav id="tabs" class="l-tabs" hidden>
     <button type="button" data-tab="screen" class="on">画面のQR</button>
     <button type="button" data-tab="paper">紙のQR</button>
-    <button type="button" data-tab="app">数を直す</button>
+    <button type="button" data-tab="app" data-owner hidden>数を直す</button>
   </nav>
 
   <form id="login" class="l-login" hidden>
@@ -66,7 +66,6 @@
     <p id="err" class="l-err" hidden></p>
     <p id="count" class="l-hint" hidden></p>
     <ul id="list" class="l-list"></ul>
-    <p class="l-foot"><button type="button" id="forget" class="l-link">この端末の合言葉を消す</button></p>
   </section>
 
   <section id="screen" hidden>
@@ -79,8 +78,9 @@
       <li>読めないときは、画面を明るくして、QRを枠の中に大きく入れてもらいます。</li>
       <li>読まれると「読み取られました」に変わります。お客様のアプリの「◯ポイント引き継ぎました」も見せてもらってください。</li>
       <li>QRは出してから3分で閉じます。画面を出したまま置いておかないでください。</li>
+      <li data-staff>お客様のアプリに「このQRは使えません」と出たときは、オーナーに知らせてください。</li>
     </ul>
-    <p class="l-foot"><button type="button" id="remake" class="l-link">画面のQRを作り直す（お客様のアプリに「このQRは使えません」と出たとき）</button></p>
+    <p class="l-foot" data-owner hidden><button type="button" id="remake" class="l-link">画面のQRを作り直す（お客様のアプリに「このQRは使えません」と出たとき）</button></p>
   </section>
 
   <section id="paper" hidden>
@@ -90,9 +90,10 @@
     <p id="pDone" class="l-done" hidden></p>
     <p id="pErr" class="l-err" hidden></p>
 
-    <h2 class="l-h">発行して PDF を保存する</h2>
-    <p class="l-hint">1組で 1〜15ポイントのQRが1枚ずつ、A6 の PDF（15ページ）になります。QRは何度でも使えるので、ふつうは1組で足ります。★同じQRは、あとから出し直せません。PDF を保存したら、A6 で印刷して保管してください。PDF も紙と同じように、ほかの人に渡さないでください。ホーム画面のアプリから保存できないときは、ブラウザで開いてください。</p>
-    <form id="issue" class="l-issue">
+    <!-- ★QRの発行・全部無効にする・数を直すは、バグる Owner の中から開いたときだけ出す（2026-11-06 ko-dai さんの指示。data-owner。js/line.js の OWNER_ONLY） -->
+    <h2 class="l-h" data-owner hidden>発行して PDF を保存する</h2>
+    <p class="l-hint" data-owner hidden>1組で 1〜15ポイントのQRが1枚ずつ、A6 の PDF（15ページ）になります。QRは何度でも使えるので、ふつうは1組で足ります。★同じQRは、あとから出し直せません。PDF を保存したら、A6 で印刷して保管してください。PDF も紙と同じように、ほかの人に渡さないでください。ホーム画面のアプリから保存できないときは、ブラウザで開いてください。</p>
+    <form id="issue" class="l-issue" data-owner hidden>
       <label for="sets">組の数</label>
       <select id="sets"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
       <button id="issueBtn" class="l-btn">発行する</button>
@@ -111,9 +112,12 @@
     </ul>
 
     <h2 class="l-h">紙をなくしたとき・引き継ぎを終えるとき</h2>
-    <p class="l-hint">画面のQRも一緒に無効になります。この端末の画面のQRは、次に出すときに新しく作ります。</p>
-    <button type="button" id="voidBtn" class="l-btn l-sub">いま使えるQRを全部無効にする</button>
+    <p class="l-hint" data-staff>QRを無効にするのは、バグる Owner の画面からです。オーナーに知らせてください。</p>
+    <p class="l-hint" data-owner hidden>画面のQRも一緒に無効になります。この端末の画面のQRは、次に出すときに新しく作ります。</p>
+    <button type="button" id="voidBtn" class="l-btn l-sub" data-owner hidden>いま使えるQRを全部無効にする</button>
   </section>
+
+  <p id="foot" class="l-foot" hidden><button type="button" id="forget" class="l-link">この端末の合言葉を消す</button></p>
 </main>
 
 <dialog id="qrDlg" class="l-qr" aria-label="お客様に見せるQR">
@@ -154,6 +158,6 @@
 
 <script src="https://t3dining.github.io/baguru-app/js/data.js?v=87b2515d"></script>   <!-- 公開するときは、公式アプリの公開先のものを読む（道具/公開する.py） -->
 <script src="js/line-pdf.js?v=3a8f5aa9"></script>
-<script src="js/line.js?v=870c8590"></script>
+<script src="js/line.js?v=7f518e24"></script>
 </body>
 </html>
