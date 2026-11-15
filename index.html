@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="css/line.css?v=bd0dedf7">
+<link rel="stylesheet" href="css/line.css?v=975ac566">
 </head>
 <body>
 <header class="l-top">
@@ -139,6 +139,12 @@
         <label><input type="radio" name="ptSign" value="1" checked><span>足す</span></label>
         <label><input type="radio" name="ptSign" value="-1"><span>減らす</span></label>
       </div>
+      <!-- LINE のポイントとして直す（2026-11-15 ko-dai さんの判断。受け口の版 2026-11-15b の memberFix の line） -->
+      <div id="ptKind" class="l-seg">
+        <label><input type="radio" name="ptKind" value="stamp" checked><span>スタンプとして</span></label>
+        <label><input type="radio" name="ptKind" value="line"><span>LINE のポイントとして</span></label>
+      </div>
+      <p class="pt-kind-hint">LINE のショップカードの数を入れるときは「LINE のポイントとして」を選びます。LINE の数だけで届くマスの特典は出ず、このあと QR では引き継げなくなります。</p>
       <label class="l-field"><span id="ptLabel"></span><input id="ptN" class="pt-n" type="number" min="1" step="1" inputmode="numeric"></label>
       <label id="ptNoteRow" class="l-field"><span>書き置き（なくても構いません。お客様には見えません）</span><input id="ptNote" maxlength="100" autocomplete="off"></label>
     </div>
@@ -158,6 +164,6 @@
 
 <script src="https://t3dining.github.io/baguru-app/js/data.js?v=87b2515d"></script>   <!-- 公開するときは、公式アプリの公開先のものを読む（道具/公開する.py） -->
 <script src="js/line-pdf.js?v=3a8f5aa9"></script>
-<script src="js/line.js?v=5adb0216"></script>
+<script src="js/line.js?v=9fa793fc"></script>
 </body>
 </html>

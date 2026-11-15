@@ -91,6 +91,7 @@ const MSG = {
   locked: '何度も違ったため、しばらく使えません。時間を置いてから、もう一度お試しください。',
   not_found: 'この番号の会員が見つかりませんでした。番号を確かめて、探し直してください。',
   need_register: 'この会員は登録がまだです。お客様のアプリで、先にお名前と電話番号を登録してもらってください。',
+  line_done: 'この電話番号では、前に LINE のポイントを引き継いでいます（アカウントを消して登録し直した方）。LINE のポイントとしては入れられません。',
   bad_input: '入れた数を確かめてください。',
   busy: '受け口が混み合っています。少し待って、もう一度お試しください。',
   not_ready: '受け口の場所を読めませんでした。少し時間を置いてから、もう一度お試しください。',
@@ -192,8 +193,14 @@ function putMember(row) {
   paint(members.length);
 }
 
+/* LINE のポイントとして直す（memberFix の line）は、受け口の版 2026-11-15b から。★前の版は line を知らずにふつうのスタンプとして足し、特典を全部出すので、
+   版が分からない・古いときは送らない。版は ping の答え（開いたとき・この窓を開くたびに読み直す） */
+const LINE_FIX_FROM = '2026-11-15b';
+let receiverVersion = '';
+
 function openPoint(m) {
   if (!OWNER_ONLY) return;
+  staffPost({ action: 'ping' }).then(r => { receiverVersion = r.version || receiverVersion; }).catch(() => {});
   pointing ={ m, n: 0, note: '', rid: fixRid() };
   $('#ptTitle').textContent = '数を直す';
   $('#ptNo').textContent = m.no;
@@ -203,6 +210,7 @@ function openPoint(m) {
   $('#ptN').value = '';
   $('#ptNote').value = '';
   $('#pointDlg input[name="ptSign"][value="1"]').checked = true;
+  $('#pointDlg input[name="ptKind"][value="stamp"]').checked = true;
   pointStep(1);
   $('#pointDlg').showModal();
   setTimeout(() => $('#ptN').focus(), 50);
@@ -216,13 +224,16 @@ function pointStep(step) {
   pointErr('');
   $('#ptBack').disabled = $('#ptOk').disabled = false;
   if (step === 1) { $('#ptOk').textContent = '確かめる'; return; }
-  const { m, n } = pointing;
+  const { m, n, line } = pointing;
   const after = Math.max(0, m.total + n);
   $('#ptAsk').textContent = '番号と数を確かめてください';
-  $('#ptShow').textContent = `${n > 0 ? '+' : '−'}${Math.abs(n)}個`;
+  $('#ptShow').textContent = `${n > 0 ? '+' : '−'}${Math.abs(n)}個${line ? '（LINE のポイント）' : ''}`;
   $('#ptAfter').textContent = `いま ${stampCount(m.total)} → ${stampCount(after)}`;
-  // 足して特典のマスに届いたら特典券も出る（受け口の版 2026-11-15a から。LINE から引き継いだ数までのマスと、前に出したマスは出ない）
-  $('#ptWarn').textContent = n > 0 ? '特典のマスに届いたら、特典券も出ます（LINE から引き継いだ数までのマスは出ません）。お客様のアプリの数も変わります。' : '出した特典券はそのままです。お客様のアプリの数も変わります。';
+  // 足して特典のマスに届いたら特典券も出る（受け口の版 2026-11-15a から。LINE から引き継いだ数までのマスと、前に出したマスは出ない）。
+  // LINE のポイントとして足すときは、その数も LINE の数に入るので、LINE の数だけで届くマスは出ない（版 2026-11-15b から）
+  $('#ptWarn').textContent = n < 0 ? `${line ? 'LINE のポイントとして減らします。' : ''}出した特典券はそのままです。お客様のアプリの数も変わります。`
+    : line ? `LINE のポイントとして入れます。LINE の数だけで届くマスの特典は出ず、今のスタンプと合わせて届いたマスの特典だけ出ます。${m.lineMovedAt ? '' : 'このあと、お客様は QR では引き継げなくなります。'}お客様のアプリの数も変わります。`
+    : '特典のマスに届いたら、特典券も出ます（LINE から引き継いだ数までのマスは出ません）。お客様のアプリの数も変わります。';
   $('#ptOk').textContent = 'この数に直す';
 }
 
@@ -233,7 +244,11 @@ function pointRead() {
   if (!Number.isInteger(n) || n < 1 || n > FIX_MAX) return pointErr(`数は 1〜${FIX_MAX} で入れてください`);
   const minus = $('#pointDlg input[name="ptSign"]:checked').value === '-1';
   if (minus && !m.total) return pointErr('いまの数が 0 なので、減らせません');
+  const line = $('#pointDlg input[name="ptKind"]:checked').value === 'line';
+  if (line && !(receiverVersion >= LINE_FIX_FROM)) return pointErr('受け口がまだ「LINE のポイントとして」に対応していません（新しい版を Google に入れるまで）。いまは「スタンプとして」だけ使えます。');
+  if (line && !m.registeredAt) return pointErr('この会員は登録がまだなので、LINE のポイントとしては入れられません。お客様のアプリで、先に会員登録をしてもらってください。');
   pointing.n = minus ? -n : n;
+  pointing.line = line;
   pointing.note = $('#ptNote').value.trim();
   pointStep(2);
 }
@@ -246,15 +261,15 @@ function pointDone(me, row, text, warn = '') {
 }
 
 async function pointSend() {
-  const me = pointing, { m, n, note, rid } = me;
+  const me = pointing, { m, n, note, rid, line } = me;
   $('#ptBack').disabled = $('#ptOk').disabled = true;
   pointErr('');
   try {
-    const r = await staffPost({ action: 'memberFix', no: m.no, delta: n, note, rid });
+    const r = await staffPost({ action: 'memberFix', no: m.no, delta: n, note, rid, ...(line && { line: true }) });
     const want = Math.max(0, m.total + n);
     // 足して特典のマスに届いたら、受け口が特典券を出す（got。受け口の版 2026-11-15a から。LINE から引き継いだ数までのマスは出ない）
     const got = (r.got || []).map(c => c.label || `${c.at}個の特典`);
-    pointDone(me, r.row, `${m.no} の数を直しました（いま ${stampCount(r.row.total)}）。${got.length ? `特典券を${got.length}枚出しました（${got.join('・')}）。` : ''}`,
+    pointDone(me, r.row, `${m.no} の数を${line ? ' LINE のポイントとして' : ''}直しました（いま ${stampCount(r.row.total)}）。${got.length ? `特典券を${got.length}枚出しました（${got.join('・')}）。` : ''}`,
       r.row.total === want ? '' : `★数が思っていたのと違います（${stampCount(want)}のはずが、${stampCount(r.row.total)}）。確かめて、必要なら直してください。`);
   } catch (e) {
     const mine = pointing === me;   // ほかの会員の窓を開いていたら、その窓には書かない
@@ -629,7 +644,7 @@ $('#login').addEventListener('submit', async e => {
   if (!v) return;
   $('#loginBtn').disabled = true;
   try {
-    await post({ action: 'ping', pin: v });
+    receiverVersion = (await post({ action: 'ping', pin: v })).version || '';
     pinSet(v);
     $('#pin').value = '';
     show(true);
@@ -643,7 +658,7 @@ $('#login').addEventListener('submit', async e => {
 (async () => {
   if (!pinGet()) { screenForget(); return show(false); }   // ほかのアプリで合言葉を消していたら、画面のQRのコードも残さない
   try {
-    await staffPost({ action: 'ping' });
+    receiverVersion = (await staffPost({ action: 'ping' })).version || '';
     show(true);
   } catch (e) {
     if (e?.code === 'bad_pin' || e?.code === 'locked') return fail(e);

@@ -81,6 +81,7 @@ main { max-width: 620px; margin: 0 auto; padding: 14px 14px 0; }
 .l-seg span { display: block; padding: 8px 6px; border-radius: 10px; background: var(--brass-soft); color: var(--coal); font-weight: 700; text-align: center; cursor: pointer; }
 .l-seg input:checked + span { background: var(--coal); color: #fff; }
 .l-seg input:focus-visible + span { outline: 2px solid var(--brass); outline-offset: 2px; }
+.pt-kind-hint { margin: -6px 2px 12px; font-size: 12px; color: var(--sub); }
 .l-field { display: flex; flex-direction: column; gap: 4px; margin: 0 0 12px; font-size: 13px; font-weight: 700; }
 .l-field input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; font-weight: 500; }
 .l-field input.pt-n { font-size: 26px; font-weight: 700; text-align: center; }
