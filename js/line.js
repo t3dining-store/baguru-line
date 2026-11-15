@@ -221,7 +221,8 @@ function pointStep(step) {
   $('#ptAsk').textContent = '番号と数を確かめてください';
   $('#ptShow').textContent = `${n > 0 ? '+' : '−'}${Math.abs(n)}個`;
   $('#ptAfter').textContent = `いま ${stampCount(m.total)} → ${stampCount(after)}`;
-  $('#ptWarn').textContent = '特典券は出ません。お客様のアプリの数も変わります。';
+  // 足して特典のマスに届いたら特典券も出る（受け口の版 2026-11-15a から。LINE から引き継いだ数までのマスと、前に出したマスは出ない）
+  $('#ptWarn').textContent = n > 0 ? '特典のマスに届いたら、特典券も出ます（LINE から引き継いだ数までのマスは出ません）。お客様のアプリの数も変わります。' : '出した特典券はそのままです。お客様のアプリの数も変わります。';
   $('#ptOk').textContent = 'この数に直す';
 }
 
