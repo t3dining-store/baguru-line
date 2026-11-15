@@ -253,6 +253,39 @@ function pointRead() {
   pointStep(2);
 }
 
+/* ---- 出た特典券が、何ポイント目のどの特典か（2026-11-15 ko-dai さんの指示「何ポイント目のどの特典が付与されるか表示」） ---- */
+let rewardNames = null;   // { マス: 特典の名前 }。公式アプリの couponTitle と同じ（ゴールは title、ほかは options を「 or 」でつなぐ）
+/** 特典の名前。マネージで直した名前（受け口の appContent の content.rewards。公式アプリの js/content.js と同じ）があれば、それ */
+async function loadRewardNames() {
+  if (rewardNames) return rewardNames;
+  const names = {};
+  STAMP.rewards.forEach(r => { names[r.at] = r.title || r.options.join(' or '); });
+  try {
+    const c = (await post({ action: 'appContent' })).content || {};
+    const o = c.rewards && typeof c.rewards === 'object' ? c.rewards : {};
+    STAMP.rewards.forEach(r => {
+      const x = o[r.at] && typeof o[r.at] === 'object' ? o[r.at] : {};
+      const title = typeof x.title === 'string' ? x.title.trim() : '';
+      const opts = Array.isArray(x.options) ? x.options.filter(s => typeof s === 'string' && s.trim()) : [];
+      if (r.title !== undefined) { if (title) names[r.at] = title; } else if (opts.length) names[r.at] = opts.join(' or ');
+    });
+    rewardNames = names;   // 読めたときだけ覚える（読めなければ data.js の名前で出し、次にまた読む）
+  } catch (e) {}
+  return names;
+}
+/** 出た券（got。受け口は前の数から上へ順に出す）を、届いたマスの上から got の数だけ当てて、「◯ポイント目：特典の名前」にする */
+function gotLines(got, before, after, names) {
+  const marks = [];
+  for (let p = before + 1; p <= after; p++) { const on = onCard(p); if (STAMP.rewards.some(r => r.at === on)) marks.push({ p, on }); }
+  const mine = marks.slice(-got.length);
+  return got.map((c, i) => {
+    const pos = mine[i] && mine[i].on === c.at ? mine[i] : null;
+    const card = pos ? Math.floor((pos.p - 1) / STAMP.goal) + 1 : 0;
+    const where = pos ? `${pos.p}ポイント目${card > 1 ? `（${card}枚目の${pos.on}個目）` : ''}` : `${c.at}個目のマス`;
+    return `・${where}${c.at === STAMP.goal ? '（ゴール）' : ''}：${names[c.at] || c.label}`;
+  });
+}
+
 /** うまくいった（窓を閉じて、探した結果に知らせる）。送っているあいだに窓を閉じて、ほかの会員を開いていたら、その窓は閉じない */
 function pointDone(me, row, text, warn = '') {
   if (pointing === me) $('#pointDlg').close();
@@ -268,8 +301,10 @@ async function pointSend() {
     const r = await staffPost({ action: 'memberFix', no: m.no, delta: n, note, rid, ...(line && { line: true }) });
     const want = Math.max(0, m.total + n);
     // 足して特典のマスに届いたら、受け口が特典券を出す（got。受け口の版 2026-11-15a から。LINE から引き継いだ数までのマスは出ない）
-    const got = (r.got || []).map(c => c.label || `${c.at}個の特典`);
-    pointDone(me, r.row, `${m.no} の数を${line ? ' LINE のポイントとして' : ''}直しました（いま ${stampCount(r.row.total)}）。${got.length ? `特典券を${got.length}枚出しました（${got.join('・')}）。` : ''}`,
+    const got = r.got || [];
+    const lines = got.length ? gotLines(got, m.total, r.row.total, await loadRewardNames()) : [];
+    pointDone(me, r.row, `${m.no} の数を${line ? ' LINE のポイントとして' : ''}直しました（いま ${stampCount(r.row.total)}）。`
+      + (lines.length ? `\n特典券を${lines.length}枚出しました（お客様のアプリの「使える特典」に入ります）。\n${lines.join('\n')}` : ''),
       r.row.total === want ? '' : `★数が思っていたのと違います（${stampCount(want)}のはずが、${stampCount(r.row.total)}）。確かめて、必要なら直してください。`);
   } catch (e) {
     const mine = pointing === me;   // ほかの会員の窓を開いていたら、その窓には書かない
