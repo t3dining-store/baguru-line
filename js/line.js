@@ -251,7 +251,9 @@ async function pointSend() {
   try {
     const r = await staffPost({ action: 'memberFix', no: m.no, delta: n, note, rid });
     const want = Math.max(0, m.total + n);
-    pointDone(me, r.row, `${m.no} の数を直しました（いま ${stampCount(r.row.total)}）。`,
+    // 足して特典のマスに届いたら、受け口が特典券を出す（got。受け口の版 2026-11-15a から。LINE から引き継いだ数までのマスは出ない）
+    const got = (r.got || []).map(c => c.label || `${c.at}個の特典`);
+    pointDone(me, r.row, `${m.no} の数を直しました（いま ${stampCount(r.row.total)}）。${got.length ? `特典券を${got.length}枚出しました（${got.join('・')}）。` : ''}`,
       r.row.total === want ? '' : `★数が思っていたのと違います（${stampCount(want)}のはずが、${stampCount(r.row.total)}）。確かめて、必要なら直してください。`);
   } catch (e) {
     const mine = pointing === me;   // ほかの会員の窓を開いていたら、その窓には書かない
